@@ -1,17 +1,19 @@
 const express = require('express');
 const VoiceResponse = require('twilio').twiml.VoiceResponse;
-const { sendTrack } = require('./segment');
+const { sendIdentify, sendTrack } = require('./segment');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const { sendIdentify, sendTrack } = require('./segment');
 const { sendSms, sendVoice } = require('./twilio');
 require('dotenv').config();
 
 const app = express();
+
 // Wider CORS config for dev/demo:
 app.use(cors({ origin: '*' }));
 
 app.use(bodyParser.json());
+// 👇 This parses form posts (needed for Twilio DTMF):
+app.use(express.urlencoded({ extended: true }));
 
 app.post('/api/signup', async (req, res) => {
   const user = req.body;
@@ -25,6 +27,7 @@ app.post('/api/signup', async (req, res) => {
     res.status(500).json({ error: err.toString() });
   }
 });
+
 app.post('/api/voice-twiml', (req, res) => {
   const name = req.query.name || 'Participant';
   const program = req.query.program || 'your program';
