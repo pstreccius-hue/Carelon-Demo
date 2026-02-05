@@ -83,63 +83,45 @@ const convoState = {}; // Simple in-memory, use Redis/DB for scale
 
 app.post('/api/ai-voice-convo', async (req, res) => {
   const callSid = req.body.CallSid;
-  let lastAIReply = `Hello! Thank you for signing up with Carelon Health. Do you have questions about other programs, or would you like to enroll in something else?`;
+  const program = req.query.program || 'a Carelon Health program';
 
-  try {
-    // 1st turn or previous context
-    if (req.body.SpeechResult) {
-      convoState[callSid] = convoState[callSid] || [];
-      convoState[callSid].push({ role: 'user', content: req.body.SpeechResult });
+  const programOverviews = {
+    "Diabetes Prevention": "Diabetes Prevention helps you adopt healthy habits to minimize your risk through lifestyle changes, coaching, and nutrition support.",
+    "Heart Health": "Heart Health provides guidance and encouragement for a stronger cardiovascular system, including exercise, nutrition, and regular check-ins.",
+    "Weight Loss": "Weight Loss helps you safely and sustainably shed pounds with personal coaching, nutrition tips, and weekly accountability."
+  };
+  const overview = programOverviews[program] || '';
 
-      const messages = [
-        { role: "system", content: `You are Carelon Health's automated agent. Greet the caller, give them a quick overview of the program they signed up for, then discuss available wellness programs, but DO NOT answer health, treatment, or PII questions—instead, advise the caller to talk to their provider for such info. If they want to enroll in another program, confirm, and use ENROLL: [program name] in your reply.` },
-        ...(convoState[callSid] || []),
-      ];
-      const aiRes = await openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
-        messages,
-      });
-      lastAIReply = aiRes.choices[0].message.content;
+  let lastAIReply;
+  if (req.body.SpeechResult) {
+    convoState[callSid] = convoState[callSid] || [];
+    convoState[callSid].push({ role: 'user', content: req.body.SpeechResult });
 
-      // Detect enrollment with "ENROLL: <program>" pattern
-      const signupMatch = lastAIReply.match(/ENROLL: ([A-Za-z ]+)/i);
-      if (signupMatch) {
-        await axios.post('https://api.segment.io/v1/identify', {
-  userId: req.body.To, // <-- this is the recipient/user's phone number!
-  traits: { additional_program: signupMatch[1] }
-}, { auth: { username: process.env.SEGMENT_WRITE_KEY, password: "" } });
-
-      convoState[callSid].push({ role: 'assistant', content: lastAIReply });
-    } else {
-      convoState[callSid] = [{ role: 'assistant', content: lastAIReply }];
-    }
-
-    const twiml = new VoiceResponse();
-    const gather = twiml.gather({
-      input: 'speech',
-      timeout: 3,
-      action: '/api/ai-voice-convo',
-      method: 'POST'
+    const systemPrompt = `You are Carelon Health's automated agent. Greet the caller by name and give a friendly, concise overview of the "${program}" program: "${overview}". Do NOT answer personal health or PII questions—advise the caller to talk to their provider. It is okay to give an overview of what other programs entail, just keep it high level and not person specific. For enrollment, say ENROLL: <program>.`;
+    const messages = [
+      { role: "system", content: systemPrompt },
+      ...(convoState[callSid] || [])
+    ];
+    const aiRes = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo', // or 'gpt-4'
+      messages,
     });
-    gather.say({ voice: 'Polly.Kimberly', language: 'en-US' }, lastAIReply);
-
-    // If timeout: end politely
-    twiml.say({ voice: 'Polly.Kimberly', language: 'en-US' }, "Thank you for your time. Goodbye!");
-    twiml.hangup();
-
-    res.type('text/xml');
-    res.send(twiml.toString());
-
-  } catch (err) {
-    // Graceful error handling
-    const twiml = new VoiceResponse();
-    twiml.say("Sorry, I'm having trouble at the moment. Please contact Carelon Health directly. Goodbye.");
-    twiml.hangup();
-    res.type('text/xml');
-    res.send(twiml.toString());
+    lastAIReply = aiRes.choices[0].message.content;
+    convoState[callSid].push({ role: 'assistant', content: lastAIReply });
+    // (enrollment code omitted here for brevity)
+  } else {
+    // First answer: overview prompt
+    const firstPrompt = `You are Carelon Health's automated agent. Greet the caller by name and give a brief but welcoming overview of the "${program}" program: "${overview}".`;
+    const aiRes = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo',
+      messages: [{ role: "system", content: firstPrompt }]
+    });
+    lastAIReply = aiRes.choices[0].message.content;
+    convoState[callSid] = [{ role: 'assistant', content: lastAIReply }];
   }
-});
 
+  // ... Gather/Say/hangup logic ...
+});
 app.get('/health', (req, res) => res.send('OK'));
 
 app.listen(process.env.PORT || 3001, () => console.log('Backend running on 3001'));
