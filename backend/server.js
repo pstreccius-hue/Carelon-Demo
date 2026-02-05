@@ -96,7 +96,7 @@ app.post('/api/ai-voice-convo', async (req, res) => {
         ...(convoState[callSid] || []),
       ];
       const aiRes = await openai.chat.completions.create({
-        model: 'gpt-4',
+        model: 'gpt-3.5-turbo',
         messages,
       });
       lastAIReply = aiRes.choices[0].message.content;
@@ -118,7 +118,7 @@ app.post('/api/ai-voice-convo', async (req, res) => {
     const twiml = new VoiceResponse();
     const gather = twiml.gather({
       input: 'speech',
-      timeout: 6,
+      timeout: 3,
       action: '/api/ai-voice-convo',
       method: 'POST'
     });
