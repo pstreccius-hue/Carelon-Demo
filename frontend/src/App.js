@@ -43,7 +43,7 @@ export default function App() {
             </label>
             <label>
               Email
-              <input placeholder="Email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
+              <input placeholder="Email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}  />
             </label>
             <label>
               Phone <span className="small-text">(E.164 format e.g. +15558675309)</span>
