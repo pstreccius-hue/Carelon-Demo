@@ -1,10 +1,13 @@
 const express = require('express');
 const bodyParser = require('body-parser');
+const cors = require('cors');  // <-- CORS import
 const { sendIdentify, sendTrack } = require('./segment');
 const { sendSms, sendVoice } = require('./twilio');
 require('dotenv').config();
 
 const app = express();
+
+app.use(cors());  // <-- Enable CORS for all origins!
 app.use(bodyParser.json());
 
 app.post('/api/signup', async (req, res) => {
@@ -18,6 +21,11 @@ app.post('/api/signup', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.toString() });
   }
+});
+
+// Optional health check
+app.get('/health', (req, res) => {
+  res.send('OK');
 });
 
 app.listen(process.env.PORT || 3001, () => console.log('Backend running on 3001'));
