@@ -5,30 +5,31 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const { OpenAI } = require('openai');
 const { sendSms, sendVoice } = require('./twilio');
+const axios = require('axios'); // Needed for Segment trait updates in AI route
 require('dotenv').config();
 
 const app = express();
 
-// Wider CORS config for dev/demo:
+// CORS config for dev/demo
 app.use(cors({ origin: '*' }));
-
 app.use(bodyParser.json());
-// 👇 This parses form posts (needed for Twilio DTMF):
 app.use(express.urlencoded({ extended: true }));
 
+//-------- Existing SIGNUP FLOW --------//
 app.post('/api/signup', async (req, res) => {
   const user = req.body;
   try {
     await sendIdentify(user);
     await sendTrack(user, "Program Enrolled", { program: user.program });
     await sendSms(user.phone, `Hi ${user.name}, welcome to the ${user.program}!`);
-    await sendVoice(user.phone, user.name, user.program);
+    await sendVoice(user.phone, user.name, user.program); // Uses the standard repeat-message voice route
     res.json({ success: true, message: "Events sent and comms triggered." });
   } catch (err) {
     res.status(500).json({ error: err.toString() });
   }
 });
 
+//-------- TwiML Demo (Repeat/Press 1) --------//
 app.post('/api/voice-twiml', (req, res) => {
   const name = req.query.name || 'Participant';
   const program = req.query.program || 'your program';
@@ -60,13 +61,11 @@ app.post('/api/voice-twiml-loop', async (req, res) => {
   const twiml = new VoiceResponse();
 
   if (digit === '1') {
-    // Track repeat action in Segment!
     await sendTrack(
       { name, phone, program },
       "Voice: Requested Repeat Message",
       { action: "Repeat", interaction: "Press 1", program }
     );
-    // Repeat the message (redirect back, preserve all params)
     twiml.redirect(`/api/voice-twiml?name=${encodeURIComponent(name)}&program=${encodeURIComponent(program)}&phone=${encodeURIComponent(phone)}`);
   } else {
     twiml.say({ voice: 'Kimberly' }, 'Goodbye.');
@@ -75,6 +74,71 @@ app.post('/api/voice-twiml-loop', async (req, res) => {
 
   res.type('text/xml');
   res.send(twiml.toString());
+});
+
+//-------- AI Agent Conversational Voice Route --------//
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const convoState = {}; // Simple in-memory, use Redis/DB for scale
+
+app.post('/api/ai-voice-convo', async (req, res) => {
+  const callSid = req.body.CallSid;
+  let lastAIReply = `Hello! Thank you for signing up with Carelon Health. Do you have questions about other programs, or would you like to enroll in something else?`;
+
+  try {
+    // 1st turn or previous context
+    if (req.body.SpeechResult) {
+      convoState[callSid] = convoState[callSid] || [];
+      convoState[callSid].push({ role: 'user', content: req.body.SpeechResult });
+
+      const messages = [
+        { role: "system", content: `You are Carelon Health's automated agent. Greet the caller, discuss available wellness programs, but DO NOT answer health, treatment, or PII questions—instead, advise the caller to talk to their provider for such info. If they want to enroll in another program, confirm, and use ENROLL: [program name] in your reply.` },
+        ...(convoState[callSid] || []),
+      ];
+      const aiRes = await openai.chat.completions.create({
+        model: 'gpt-4',
+        messages,
+      });
+      lastAIReply = aiRes.choices[0].message.content;
+
+      // Detect enrollment with "ENROLL: <program>" pattern
+      const signupMatch = lastAIReply.match(/ENROLL: ([A-Za-z ]+)/i);
+      if (signupMatch) {
+        await axios.post('https://api.segment.io/v1/identify', {
+          userId: req.body.Caller, // Or phone, or other unique
+          traits: { additional_program: signupMatch[1] }
+        }, { auth: { username: process.env.SEGMENT_WRITE_KEY, password: "" } });
+      }
+
+      convoState[callSid].push({ role: 'assistant', content: lastAIReply });
+    } else {
+      convoState[callSid] = [{ role: 'assistant', content: lastAIReply }];
+    }
+
+    const twiml = new VoiceResponse();
+    const gather = twiml.gather({
+      input: 'speech',
+      timeout: 6,
+      action: '/api/ai-voice-convo',
+      method: 'POST'
+    });
+    gather.say({ voice: 'Kimberly' }, lastAIReply);
+
+    // If timeout: end politely
+    twiml.say({ voice: 'Kimberly' }, "Thank you for your time. Goodbye!");
+    twiml.hangup();
+
+    res.type('text/xml');
+    res.send(twiml.toString());
+
+  } catch (err) {
+    // Graceful error handling
+    const twiml = new VoiceResponse();
+    twiml.say("Sorry, I'm having trouble at the moment. Please contact Carelon Health directly. Goodbye.");
+    twiml.hangup();
+    res.type('text/xml');
+    res.send(twiml.toString());
+  }
 });
 
 app.get('/health', (req, res) => res.send('OK'));
