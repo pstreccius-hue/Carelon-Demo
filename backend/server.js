@@ -10,19 +10,18 @@ require('dotenv').config();
 
 const app = express();
 
-// CORS config for dev/demo
 app.use(cors({ origin: '*' }));
 app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true }));
 
-//-------- Existing SIGNUP FLOW --------//
+//-------- SIGNUP FLOW --------//
 app.post('/api/signup', async (req, res) => {
   const user = req.body;
   try {
     await sendIdentify(user);
     await sendTrack(user, "Program Enrolled", { program: user.program });
     await sendSms(user.phone, `Hi ${user.name}, welcome to the ${user.program}!`);
-    await sendVoice(user.phone, user.name, user.program); // Uses the standard repeat-message voice route
+    await sendVoice(user.phone, user.name, user.program);
     res.json({ success: true, message: "Events sent and comms triggered." });
   } catch (err) {
     res.status(500).json({ error: err.toString() });
@@ -108,7 +107,16 @@ app.post('/api/ai-voice-convo', async (req, res) => {
     });
     lastAIReply = aiRes.choices[0].message.content;
     convoState[callSid].push({ role: 'assistant', content: lastAIReply });
-    // (enrollment code omitted here for brevity)
+
+    // ✨ FIX: use req.body.To as userId (callee, the real user)
+    const signupMatch = lastAIReply.match(/ENROLL: ([A-Za-z ]+)/i);
+    if (signupMatch) {
+      await axios.post('https://api.segment.io/v1/identify', {
+        userId: req.body.To, // <-- THIS IS THE FIX!
+        traits: { additional_program: signupMatch[1] }
+      }, { auth: { username: process.env.SEGMENT_WRITE_KEY, password: "" } });
+    }
+
   } else {
     // First answer: overview prompt
     const firstPrompt = `You are Carelon Health's automated agent. Greet the caller by name and give a brief but welcoming overview of the "${program}" program: "${overview}".`;
@@ -120,8 +128,22 @@ app.post('/api/ai-voice-convo', async (req, res) => {
     convoState[callSid] = [{ role: 'assistant', content: lastAIReply }];
   }
 
-  // ... Gather/Say/hangup logic ...
+  const twiml = new VoiceResponse();
+  const gather = twiml.gather({
+    input: 'speech',
+    timeout: 5,
+    action: '/api/ai-voice-convo',
+    method: 'POST'
+  });
+  gather.say({ voice: 'Polly.Kimberly', language: 'en-US' }, lastAIReply);
+
+  twiml.say({ voice: 'Polly.Kimberly', language: 'en-US' }, "Thank you for your time. Goodbye!");
+  twiml.hangup();
+
+  res.type('text/xml');
+  res.send(twiml.toString());
 });
+
 app.get('/health', (req, res) => res.send('OK'));
 
 app.listen(process.env.PORT || 3001, () => console.log('Backend running on 3001'));
