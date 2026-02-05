@@ -44,7 +44,7 @@ app.post('/api/voice-twiml', (req, res) => {
     action: `/api/voice-twiml-loop?name=${encodeURIComponent(name)}&program=${encodeURIComponent(program)}&phone=${encodeURIComponent(phone)}`
   });
   gather.say(
-    { voice: 'Kimberly' },
+    { voice: 'Polly.Kimberly', language: 'en-US' },
     `Hello ${name}, this is Carelon Health! Congratulations on starting the ${program} program. Press 1 to hear this message again.`
   );
 
@@ -68,7 +68,7 @@ app.post('/api/voice-twiml-loop', async (req, res) => {
     );
     twiml.redirect(`/api/voice-twiml?name=${encodeURIComponent(name)}&program=${encodeURIComponent(program)}&phone=${encodeURIComponent(phone)}`);
   } else {
-    twiml.say({ voice: 'Kimberly' }, 'Goodbye.');
+    twiml.say({ voice: 'Polly.Kimberly', language: 'en-US' }, 'Goodbye.');
     twiml.hangup();
   }
 
@@ -122,10 +122,10 @@ app.post('/api/ai-voice-convo', async (req, res) => {
       action: '/api/ai-voice-convo',
       method: 'POST'
     });
-    gather.say({ voice: 'Kimberly' }, lastAIReply);
+    gather.say({ voice: 'Polly.Kimberly', language: 'en-US' }, lastAIReply);
 
     // If timeout: end politely
-    twiml.say({ voice: 'Kimberly' }, "Thank you for your time. Goodbye!");
+    twiml.say({ voice: 'Polly.Kimberly', language: 'en-US' }, "Thank you for your time. Goodbye!");
     twiml.hangup();
 
     res.type('text/xml');
