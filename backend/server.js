@@ -3,6 +3,7 @@ const VoiceResponse = require('twilio').twiml.VoiceResponse;
 const { sendIdentify, sendTrack } = require('./segment');
 const bodyParser = require('body-parser');
 const cors = require('cors');
+const { OpenAI } = require('openai');
 const { sendSms, sendVoice } = require('./twilio');
 require('dotenv').config();
 
