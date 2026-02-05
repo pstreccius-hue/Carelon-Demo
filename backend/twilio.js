@@ -10,5 +10,5 @@ exports.sendVoice = (to, name, program) =>
   client.calls.create({
     to,
     from: TWILIO_NUMBER,
-    twiml: `<Response><Say voice="Kendra-Neural">Hello ${name}, this is Carelon Health! Congratulations on starting the ${program} program. If you have questions, reply YES to your welcome text, you'll see that shortly!</Say></Response>`
+    twiml: `<Response><Say voice="Kimberly-Neural">Hello ${name}, this is Caralon Health! Congratulations on starting the ${program} program. If you have questions, reply YES to your welcome text, you'll see that shortly!</Say></Response>`
   });
