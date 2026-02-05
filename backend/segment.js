@@ -9,6 +9,10 @@ exports.sendIdentify = user => axios.post(
 
 exports.sendTrack = (user, event, properties) => axios.post(
   'https://api.segment.io/v1/track',
-  { userId: user.email || user.phone, event, properties },
+  {
+    userId: user.email || user.phone || user.name || 'anonymous-voice',
+    event,
+    properties,
+  },
   { auth: { username: SEGMENT_WRITE_KEY, password: '' } }
 );
