@@ -25,9 +25,13 @@ export default function App() {
   return (
     <div className="carelon-bg">
       <nav className="carelon-navbar">
-        <img src="https://www.carelon.com/etc.clientlibs/carelon/clientlibs/clientlib-site/resources/images/logo.svg" alt="Carelon Health" className="carelon-logo" />
-        <span>Wellness Program Demo</span>
-      </nav>
+  <img
+    src="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/icons/hospital.svg"
+    alt="Hospital"
+    className="carelon-logo"
+  />
+  <span>Wellness Program Demo</span>
+</nav>
       <main>
         <div className="carelon-card">
           <h1>Join a Carelon Wellness Program</h1>
