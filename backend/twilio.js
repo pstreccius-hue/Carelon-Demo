@@ -5,10 +5,10 @@ const client = twilio(TWILIO_SID, TWILIO_TOKEN);
 exports.sendSms = (to, body) =>
   client.messages.create({ body, to, from: TWILIO_NUMBER });
 
-// Initiate a call with all useful params in URL
+// Updated: All new voice calls use your AI voice agent route
 exports.sendVoice = (to, name, program) =>
   client.calls.create({
     to,
     from: TWILIO_NUMBER,
-    url: `https://carelon-demo.onrender.com/api/voice-twiml?name=${encodeURIComponent(name)}&program=${encodeURIComponent(program)}&phone=${encodeURIComponent(to)}`
+    url: `https://carelon-demo.onrender.com/api/ai-voice-convo?name=${encodeURIComponent(name)}&program=${encodeURIComponent(program)}&phone=${encodeURIComponent(to)}`
   });
