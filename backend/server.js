@@ -5,7 +5,7 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const { OpenAI } = require('openai');
 const { sendSms, sendVoice } = require('./twilio');
-const axios = require('axios'); // Needed for Segment trait updates in AI route
+const axios = require('axios');
 require('dotenv').config();
 
 const app = express();
@@ -83,7 +83,7 @@ const convoState = {}; // Simple in-memory, use Redis/DB for scale
 app.post('/api/ai-voice-convo', async (req, res) => {
   const callSid = req.body.CallSid;
   const program = req.query.program || 'a Carelon Health program';
-   const firstName = req.query.firstName || 'Participant';
+  const firstName = req.query.firstName || 'Participant';
 
   const programOverviews = {
     "Diabetes Prevention": "Diabetes Prevention helps you adopt healthy habits to minimize your risk through lifestyle changes, coaching, and nutrition support.",
@@ -92,12 +92,13 @@ app.post('/api/ai-voice-convo', async (req, res) => {
   };
   const overview = programOverviews[program] || '';
 
-   let lastAIReply;
+  let lastAIReply;
   if (req.body.SpeechResult) {
     convoState[callSid] = convoState[callSid] || [];
     convoState[callSid].push({ role: 'user', content: req.body.SpeechResult });
 
-    const systemPrompt = `You are Carelon Health's automated agent. Always greet and refer to the caller using their first name: "${firstName}". After greeting them, give a friendly, concise overview of the "${program}" program: "${overview}". Do NOT answer personal health or PII questions...`;
+    // ------ PERSONALIZED PROMPT with FIRST NAME ------
+    const systemPrompt = `You are Carelon Health's automated agent. When you greet the caller, say "Hello, ${firstName}!" before giving a friendly, concise overview of the "${program}" program: "${overview}". Do NOT answer personal health or PII questions—advise the caller to talk to their provider. It is okay to give an overview of what other programs entail, just keep it high level and not person specific. For enrollment, say ENROLL: <program>.`;
     const messages = [
       { role: "system", content: systemPrompt },
       ...(convoState[callSid] || [])
@@ -109,18 +110,17 @@ app.post('/api/ai-voice-convo', async (req, res) => {
     lastAIReply = aiRes.choices[0].message.content;
     convoState[callSid].push({ role: 'assistant', content: lastAIReply });
 
-    // ✨ FIX: use req.body.To as userId (callee, the real user)
     const signupMatch = lastAIReply.match(/ENROLL: ([A-Za-z ]+)/i);
     if (signupMatch) {
       await axios.post('https://api.segment.io/v1/identify', {
-        userId: req.body.To, // <-- THIS IS THE FIX!
+        userId: req.body.To, // <-- user/recipient's phone number
         traits: { additional_program: signupMatch[1] }
       }, { auth: { username: process.env.SEGMENT_WRITE_KEY, password: "" } });
     }
 
   } else {
-    // First answer: overview prompt
-    const firstPrompt = `You are Carelon Health's automated agent. Greet the caller by name and give a brief but welcoming overview of the "${program}" program: "${overview}".`;
+    // ------ FIRST PROMPT with FIRST NAME ------
+    const firstPrompt = `You are Carelon Health's automated agent. Greet the caller by saying "Hello, ${firstName}!" and give a brief but welcoming overview of the "${program}" program: "${overview}".`;
     const aiRes = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
       messages: [{ role: "system", content: firstPrompt }]
