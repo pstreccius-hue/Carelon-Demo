@@ -3,21 +3,25 @@ const VoiceResponse = require('twilio').twiml.VoiceResponse;
 app.post('/api/voice-twiml', (req, res) => {
   const name = req.query.name || 'Participant';
   const program = req.query.program || 'your program';
+  const phone = req.query.phone || '';
 
   const twiml = new VoiceResponse();
 
-  // Gather will listen for a digit (timeout = 5 seconds, numDigits = 1)
   const gather = twiml.gather({
     input: 'dtmf',
     numDigits: 1,
     timeout: 5,
-    action: `/api/voice-twiml-loop?name=${encodeURIComponent(name)}&program=${encodeURIComponent(program)}`
+    action: `/api/voice-twiml-loop?name=${encodeURIComponent(name)}&program=${encodeURIComponent(program)}&phone=${encodeURIComponent(phone)}`
   });
   gather.say(
     { voice: 'Kimberly' },
-    `Hello ${name}, this is Caralon Health! Congratulations on starting the ${program} program. 
+    `Hello ${name}, this is Carelon Health! Congratulations on starting the ${program} program. 
     Press 1 to hear this message again.`
   );
+
+  res.type('text/xml');
+  res.send(twiml.toString());
+});
 
   // If no input, fall through: Twilio will post to the action as well
 
