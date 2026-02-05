@@ -83,6 +83,7 @@ const convoState = {}; // Simple in-memory, use Redis/DB for scale
 app.post('/api/ai-voice-convo', async (req, res) => {
   const callSid = req.body.CallSid;
   const program = req.query.program || 'a Carelon Health program';
+   const firstName = req.query.firstName || 'Participant';
 
   const programOverviews = {
     "Diabetes Prevention": "Diabetes Prevention helps you adopt healthy habits to minimize your risk through lifestyle changes, coaching, and nutrition support.",
@@ -91,12 +92,12 @@ app.post('/api/ai-voice-convo', async (req, res) => {
   };
   const overview = programOverviews[program] || '';
 
-  let lastAIReply;
+   let lastAIReply;
   if (req.body.SpeechResult) {
     convoState[callSid] = convoState[callSid] || [];
     convoState[callSid].push({ role: 'user', content: req.body.SpeechResult });
 
-    const systemPrompt = `You are Carelon Health's automated agent. Greet the caller by name and give a friendly, concise overview of the "${program}" program: "${overview}". Do NOT answer personal health or PII questions—advise the caller to talk to their provider. It is okay to give an overview of what other programs entail, just keep it high level and not person specific. For enrollment, say ENROLL: <program>.`;
+    const systemPrompt = `You are Carelon Health's automated agent. Always greet and refer to the caller using their first name: "${firstName}". After greeting them, give a friendly, concise overview of the "${program}" program: "${overview}". Do NOT answer personal health or PII questions...`;
     const messages = [
       { role: "system", content: systemPrompt },
       ...(convoState[callSid] || [])
