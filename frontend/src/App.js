@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import "./App.css";
 
 export default function App() {
   const [form, setForm] = useState({ name: "", email: "", phone: "", program: "Weight Loss" });
@@ -14,28 +15,54 @@ export default function App() {
         body: JSON.stringify(form)
       });
       const data = await res.json();
-      if (data.success) setMsg("Success! Check your messages.");
-      else setMsg(`Failed: ${data.error}`);
+      if (data.success) setMsg("🎉 Success! Check your messages.");
+      else setMsg(`⚠️ Failed: ${data.error}`);
     } catch (err) {
-      setMsg(`Failed: ${err.toString()}`);
+      setMsg(`⚠️ Failed: ${err.toString()}`);
     }
   };
 
   return (
-    <main>
-      <h1>Carelon Health Program Demo</h1>
-      <form onSubmit={submit}>
-        <input placeholder="Name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
-        <input placeholder="Email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
-        <input placeholder="Phone (+15555555555)" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} required />
-        <select value={form.program} onChange={e => setForm(f => ({ ...f, program: e.target.value }))}>
-          <option>Weight Loss</option>
-          <option>Heart Health</option>
-          <option>Diabetes Prevention</option>
-        </select>
-        <button type="submit">Join Program</button>
-      </form>
-      <div style={{ minHeight: 40 }}>{msg}</div>
-    </main>
+    <div className="carelon-bg">
+      <nav className="carelon-navbar">
+        <img src="https://www.carelon.com/etc.clientlibs/carelon/clientlibs/clientlib-site/resources/images/logo.svg" alt="Carelon Health" className="carelon-logo" />
+        <span>Wellness Program Demo</span>
+      </nav>
+      <main>
+        <div className="carelon-card">
+          <h1>Join a Carelon Wellness Program</h1>
+          <form onSubmit={submit}>
+            <label>
+              Name
+              <input placeholder="Name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+            </label>
+            <label>
+              Email
+              <input placeholder="Email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
+            </label>
+            <label>
+              Phone <span className="small-text">(E.164 format e.g. +15558675309)</span>
+              <input placeholder="+1..." value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} required />
+            </label>
+            <label>
+              Program
+              <select value={form.program} onChange={e => setForm(f => ({ ...f, program: e.target.value }))}>
+                <option>Weight Loss</option>
+                <option>Heart Health</option>
+                <option>Diabetes Prevention</option>
+              </select>
+            </label>
+            <button className="carelon-btn" type="submit">Join Program</button>
+          </form>
+          <div className="carelon-status">{msg}</div>
+          <p className="carelon-small">
+            * You will receive a real SMS and a phone call on the number entered above.
+          </p>
+        </div>
+      </main>
+      <footer className="carelon-footer">
+        &copy; {new Date().getFullYear()} Carelon Health. Demo Only.
+      </footer>
+    </div>
   );
 }
