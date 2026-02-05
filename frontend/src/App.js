@@ -26,7 +26,7 @@ export default function App() {
     <div className="carelon-bg">
       <nav className="carelon-navbar">
   <img
-    src="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/icons/hospital.svg"
+    src="https://upload.wikimedia.org/wikipedia/commons/1/12/Medical_Cross_white.svg"
     alt="Hospital"
     className="carelon-logo"
   />
