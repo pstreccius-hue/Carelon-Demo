@@ -1,0 +1,129 @@
+body, html {
+  margin: 0;
+  padding: 0;
+  font-family: 'Montserrat', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  background: #f7fafc;
+}
+
+.carelon-bg {
+  background: linear-gradient(135deg, #f9fbff 0%, #e3eeff 100%);
+  min-height: 100vh;
+}
+
+.carelon-navbar {
+  background: #00154D;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 1rem 2rem;
+  font-size: 1.3rem;
+  font-weight: 600;
+  box-shadow: 0 2px 8px 0 #00154d10;
+}
+
+.carelon-logo {
+  height: 40px;
+}
+
+main {
+  display: flex;
+  justify-content: center;
+  margin-top: 40px;
+}
+
+.carelon-card {
+  background: #fff;
+  box-shadow: 0 4px 32px #2155a710;
+  border-radius: 15px;
+  padding: 2.5rem 2.5rem 2rem 2.5rem;
+  min-width: 340px;
+  max-width: 400px;
+  transition: box-shadow 0.2s;
+}
+
+.carelon-card h1 {
+  color: #00154D;
+  margin-bottom: 1.5rem;
+  font-size: 1.65rem;
+  font-weight: 700;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+input, select {
+  font-size: 1rem;
+  padding: 0.5rem;
+  margin-top: 0.3rem;
+  border: 1px solid #b7c4dd;
+  border-radius: 6px;
+  outline: transparent;
+  background: #f3f8ff;
+  transition: border 0.2s;
+}
+
+input:focus, select:focus {
+  border: 1.5px solid #2155a7;
+}
+
+label {
+  color: #06377b;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.carelon-btn {
+  margin-top: 1rem;
+  background: linear-gradient(90deg, #003edd, #0094ff 80%);
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  padding: 0.7rem 1.5rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 12px #0094ff33;
+  transition: transform 0.11s, box-shadow 0.12s;
+}
+.carelon-btn:hover {
+  transform: translateY(-2px) scale(1.016);
+  box-shadow: 0 3px 16px #0094ff44;
+}
+
+.carelon-status {
+  margin: 1.6rem 0 0.4rem 0;
+  height: 2.2rem;
+  color: #2155a7;
+  font-weight: 700;
+  text-align: center;
+  font-size: 1rem;
+}
+.carelon-status:empty {
+  height: 0;
+}
+
+.carelon-small {
+  color: #888;
+  margin-top: 0.3rem;
+  font-size: 0.97rem;
+  text-align: center;
+}
+.small-text {
+  color: #83a2cb;
+  font-size: 0.84em;
+  margin-left: 7px;
+}
+
+.carelon-footer {
+  color: #fff;
+  text-align: center;
+  background: #00154d;
+  padding: 1.5rem 0 0.7rem 0;
+  margin-top: 60px;
+  font-size: 1.07rem;
+  letter-spacing: 0.01em;
+}
