@@ -105,10 +105,9 @@ app.post('/api/ai-voice-convo', async (req, res) => {
       const signupMatch = lastAIReply.match(/ENROLL: ([A-Za-z ]+)/i);
       if (signupMatch) {
         await axios.post('https://api.segment.io/v1/identify', {
-          userId: req.body.Caller, // Or phone, or other unique
-          traits: { additional_program: signupMatch[1] }
-        }, { auth: { username: process.env.SEGMENT_WRITE_KEY, password: "" } });
-      }
+  userId: req.body.To, // <-- this is the recipient/user's phone number!
+  traits: { additional_program: signupMatch[1] }
+}, { auth: { username: process.env.SEGMENT_WRITE_KEY, password: "" } });
 
       convoState[callSid].push({ role: 'assistant', content: lastAIReply });
     } else {
