@@ -92,7 +92,7 @@ app.post('/api/ai-voice-convo', async (req, res) => {
       convoState[callSid].push({ role: 'user', content: req.body.SpeechResult });
 
       const messages = [
-        { role: "system", content: `You are Carelon Health's automated agent. Greet the caller, discuss available wellness programs, but DO NOT answer health, treatment, or PII questions—instead, advise the caller to talk to their provider for such info. If they want to enroll in another program, confirm, and use ENROLL: [program name] in your reply.` },
+        { role: "system", content: `You are Carelon Health's automated agent. Greet the caller, give them a quick overview of the program they signed up for, then discuss available wellness programs, but DO NOT answer health, treatment, or PII questions—instead, advise the caller to talk to their provider for such info. If they want to enroll in another program, confirm, and use ENROLL: [program name] in your reply.` },
         ...(convoState[callSid] || []),
       ];
       const aiRes = await openai.chat.completions.create({
