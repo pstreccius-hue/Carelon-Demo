@@ -1,4 +1,5 @@
 const VoiceResponse = require('twilio').twiml.VoiceResponse;
+const { sendTrack } = require('./segment'); // Make sure this is at top
 
 app.post('/api/voice-twiml', (req, res) => {
   const name = req.query.name || 'Participant';
@@ -30,18 +31,24 @@ app.post('/api/voice-twiml', (req, res) => {
 });
 
 // Handler for what happens after Gather (loop or goodbye)
-app.post('/api/voice-twiml-loop', (req, res) => {
+app.post('/api/voice-twiml-loop', async (req, res) => {
   const name = req.query.name || 'Participant';
   const program = req.query.program || 'your program';
+  const phone = req.query.phone || '';
   const digit = req.body.Digits;
 
   const twiml = new VoiceResponse();
 
   if (digit === '1') {
-    // Repeat the message
-    twiml.redirect(`/api/voice-twiml?name=${encodeURIComponent(name)}&program=${encodeURIComponent(program)}`);
+    // Track repeat action in Segment!
+    await sendTrack(
+      { name, phone, program },
+      "Voice: Requested Repeat Message",
+      { action: "Repeat", interaction: "Press 1", program }
+    );
+    // Repeat the message (redirect back, preserve all params)
+    twiml.redirect(`/api/voice-twiml?name=${encodeURIComponent(name)}&program=${encodeURIComponent(program)}&phone=${encodeURIComponent(phone)}`);
   } else {
-    // Goodbye if anything else (inc. timeout)
     twiml.say({ voice: 'Kimberly' }, 'Goodbye.');
     twiml.hangup();
   }
