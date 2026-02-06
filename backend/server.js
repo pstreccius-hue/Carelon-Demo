@@ -78,12 +78,11 @@ app.post('/api/voice-twiml-loop', async (req, res) => {
 app.all('/api/ai-voice-convo', (req, res) => {
   const userId = req.query.phone || 'anonymous';
   const firstName = req.query.firstName || 'Participant';
+  // Build URL using normal &
   let wsUrl = 'wss://carelon-demo.onrender.com/conversation-relay?userId=' + encodeURIComponent(userId) + '&firstName=' + encodeURIComponent(firstName);
-
-  // Final XML must have only &amp; (never a raw &)
+  // Replace & with &amp; for XML
   wsUrl = wsUrl.replace(/&/g, '&amp;');
-
-  // One-line string, to prevent any parser hiccups:
+  // Build the TwiML in a single, classic JS string
   const twiml = '<Response><Connect><ConversationRelay websocket-url="' + wsUrl + '" transcription-enabled="true" client-participant-identity="user_' + userId + '" client-display-name="' + firstName + '" bot-participant-identity="carelon_ai_agent" bot-display-name="Carelon AI Assistant"/></Connect></Response>';
 
   res.type('text/xml');
