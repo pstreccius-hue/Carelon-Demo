@@ -78,22 +78,14 @@ app.post('/api/voice-twiml-loop', async (req, res) => {
 app.all('/api/ai-voice-convo', (req, res) => {
   const userId = req.query.phone || 'anonymous';
   const firstName = req.query.firstName || 'Participant';
+  let wsUrl = 'wss://carelon-demo.onrender.com/conversation-relay?userId=' + encodeURIComponent(userId) + '&firstName=' + encodeURIComponent(firstName);
 
-  let wsUrl = `wss://carelon-demo.onrender.com/conversation-relay?userId=${encodeURIComponent(userId)}&firstName=${encodeURIComponent(firstName)}`;
-  wsUrl = wsUrl.replace(/&/g, '&amp;');  // ← This is key
+  // Final XML must have only &amp; (never a raw &)
+  wsUrl = wsUrl.replace(/&/g, '&amp;');
 
-  const twiml = `<Response>
-<Connect>
-<ConversationRelay
-  websocket-url="${wsUrl}"
-  transcription-enabled="true"
-  client-participant-identity="user_${userId}"
-  client-display-name="${firstName}"
-  bot-participant-identity="carelon_ai_agent"
-  bot-display-name="Carelon AI Assistant"
-/>
-</Connect>
-</Response>`;
+  // One-line string, to prevent any parser hiccups:
+  const twiml = '<Response><Connect><ConversationRelay websocket-url="' + wsUrl + '" transcription-enabled="true" client-participant-identity="user_' + userId + '" client-display-name="' + firstName + '" bot-participant-identity="carelon_ai_agent" bot-display-name="Carelon AI Assistant"/></Connect></Response>';
+
   res.type('text/xml');
   res.send(twiml);
 });
