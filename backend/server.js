@@ -35,21 +35,27 @@ app.post('/api/signup', async (req, res) => {
 //----------------------------------------------------------
 app.all('/api/ai-voice-convo', (req, res) => {
   try {
-    const userId = req.query.phone || 'anonymous';
-    const wsUrl = `wss://carelon-demo.onrender.com/conversation-relay?userId=${userId}`;
-    const response = new VoiceResponse();
-    const connect = response.connect();
-    connect.conversationRelay({
-      url: wsUrl,
-      transcriptionEnabled: true,
-      clientParticipantIdentity: `user_${userId}`,
-      clientDisplayName: 'Participant',
-      botParticipantIdentity: 'carelon_ai_agent',
-      botDisplayName: 'Carelon AI Assistant',
-      welcomeGreeting: `Hello, ${userId}! How can I help you today?` // Optional
-    });
+    const { phone, firstName } = req.query;
+    const userId = phone || 'anonymous';
+    const safeFirstName = (firstName || "there").replace(/[^a-zA-Z\- ]/g, "");
+    const wsUrl = `wss://carelon-demo.onrender.com/conversation-relay?userId=${encodeURIComponent(userId)}`;
+    const twiml =
+      `<Response>
+         <Connect>
+           <ConversationRelay
+             url="${wsUrl}"
+             transcriptionEnabled="true"
+             clientParticipantIdentity="user_${userId}"
+             clientDisplayName="Participant"
+             botParticipantIdentity="carelon_ai_agent"
+             botDisplayName="Carelon AI Assistant"
+             welcomeGreeting="Hello, ${safeFirstName}! How can I help you today?"
+           />
+         </Connect>
+       </Response>`;
+    console.log('TwiML:', twiml);
     res.type('text/xml');
-    res.send(response.toString());
+    res.send(twiml);
   } catch (err) {
     console.error('ai-voice-convo error:', err);
     res.status(500).send('Internal error');
