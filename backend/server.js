@@ -35,10 +35,17 @@ app.post('/api/signup', async (req, res) => {
 //----------------------------------------------------------
 app.all('/api/ai-voice-convo', (req, res) => {
   try {
-    const { phone, firstName } = req.query;
+    const { phone, firstName, program } = req.query;
     const userId = phone || 'anonymous';
     const safeFirstName = (firstName || "there").replace(/[^a-zA-Z\- ]/g, "");
+    const safeProgram = (program || "our programs").replace(/[^a-zA-Z\- ]/g, "");
+
     const wsUrl = `wss://carelon-demo.onrender.com/conversation-relay?userId=${encodeURIComponent(userId)}`;
+    const welcomePrompt =
+      `Hello, ${safeFirstName}! Welcome to the ${safeProgram} program. Would you like a quick overview? ` +
+      `We also offer Wellness Coaching, Smoking Cessation, and Diabetes Prevention programs. ` +
+      `Would you like to hear a summary of these, or enroll in a different program today?`;
+
     const twiml =
       `<Response>
          <Connect>
@@ -49,11 +56,11 @@ app.all('/api/ai-voice-convo', (req, res) => {
              clientDisplayName="Participant"
              botParticipantIdentity="carelon_ai_agent"
              botDisplayName="Carelon AI Assistant"
-             welcomeGreeting="Hello, ${safeFirstName}! How can I help you today?"
+             welcomeGreeting="${welcomePrompt}"
            />
          </Connect>
        </Response>`;
-    console.log('TwiML:', twiml);
+
     res.type('text/xml');
     res.send(twiml);
   } catch (err) {
@@ -91,7 +98,10 @@ wss.on('connection', (ws, req) => {
         const userText = data.transcription?.transcript || '';
         const userId = req.url && new URL('http://x' + req.url).searchParams.get("userId");
         const firstName = req.url && new URL('http://x' + req.url).searchParams.get("firstName");
-        const systemPrompt = `You are Carelon Health's automated agent. Greet by first name (${firstName}). Answer high-level program questions, never specific treatment/PII.`;
+        const systemPrompt =
+  `You are Carelon Health's automated agent. After your greeting, if the user requests a program overview, provide a clear, high-level (but non-clinical, non-PII) description ` +
+  `of the ${safeProgram} program and summarize the other programs: Wellness Coaching, Smoking Cessation, Diabetes Prevention. ` +
+  `If the user expresses interest in another program, prompt to confirm enrollment, then log "ENROLL: <program name>". Never provide medical advice or handle personal information.`;
         const messages = [
           { role: "system", content: systemPrompt },
           { role: "user", content: userText }
