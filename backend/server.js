@@ -80,8 +80,8 @@ app.all('/api/ai-voice-convo', (req, res) => {
   const firstName = req.query.firstName || 'Participant';
 
   // Compose URL and encode '&' for XML
-  let wsUrl = `wss://carelon-demo.onrender.com/conversation-relay?userId=${encodeURIComponent(userId)}&firstName=${encodeURIComponent(firstName)}`;
-  wsUrl = wsUrl.replace(/&/g, '&amp;'); // <- XML-safe ampersand
+  let wsUrl = `wss://carelon-demo.onrender.com/conversation-relay?userId=${encodeURIComponent(userId)}&ampfirstName=${encodeURIComponent(firstName)}`;
+ 
 
   const twiml = `<Response>
 <Connect>
