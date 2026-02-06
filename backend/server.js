@@ -33,22 +33,16 @@ app.post('/api/signup', async (req, res) => {
 // Conversation Relay TwiML Route - COPY THIS EXACTLY
 //----------------------------------------------------------
 app.all('/api/ai-voice-convo', (req, res) => {
-  // DO NOT encode phone or firstName here, just use raw for TwiML url params
-  const userId = req.query.phone || 'anonymous';
+  // DO NOT encode here
+  const userId = req.query.phone || 'anonymous'; // e.g., "+17017211093"
   const firstName = req.query.firstName || 'Participant';
 
-  // Build the query string (with raw &)
-  let wsUrl = 'wss://carelon-demo.onrender.com/conversation-relay?userId='
-    + userId
-    + '&firstName='
-    + firstName;
-  // NOW, ONLY escape & as &amp; **after** everything else is built
+  let wsUrl = 'wss://carelon-demo.onrender.com/conversation-relay?userId=' + userId + '&firstName=' + firstName;
   wsUrl = wsUrl.replace(/&/g, '&amp;');
 
-  const twiml =
-    '<Response><Connect><ConversationRelay websocket-url="' + wsUrl +
-    '" transcription-enabled="true" client-participant-identity="user_' +
-    userId + '" client-display-name="' + firstName +
+  const twiml = '<Response><Connect><ConversationRelay websocket-url="' + wsUrl +
+    '" transcription-enabled="true" client-participant-identity="user_' + userId +
+    '" client-display-name="' + firstName +
     '" bot-participant-identity="carelon_ai_agent" bot-display-name="Carelon AI Assistant"/></Connect></Response>';
 
   res.type('text/xml');
