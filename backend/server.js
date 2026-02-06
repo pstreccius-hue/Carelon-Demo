@@ -33,28 +33,22 @@ app.post('/api/signup', async (req, res) => {
 // Conversation Relay TwiML Route - COPY THIS EXACTLY
 //----------------------------------------------------------
 app.all('/api/ai-voice-convo', (req, res) => {
+  // DO NOT encode phone or firstName here, just use raw for TwiML url params
   const userId = req.query.phone || 'anonymous';
   const firstName = req.query.firstName || 'Participant';
 
-  // Use raw & while building, then replace only in XML:
-  let wsUrl = 'wss://carelon-demo.onrender.com/conversation-relay?userId=' +
-    encodeURIComponent(userId) +
-    '&firstName=' + encodeURIComponent(firstName);
+  // Build the query string (with raw &)
+  let wsUrl = 'wss://carelon-demo.onrender.com/conversation-relay?userId='
+    + userId
+    + '&firstName='
+    + firstName;
+  // NOW, ONLY escape & as &amp; **after** everything else is built
+  wsUrl = wsUrl.replace(/&/g, '&amp;');
 
-  // Only escape & after the ? for XML attribute
-  function xmlEscapeUrl(url) {
-    const idx = url.indexOf('?');
-    if (idx === -1) return url;
-    return url.substring(0, idx + 1) + url.substring(idx + 1).replace(/&/g, '&amp;');
-  }
-  wsUrl = xmlEscapeUrl(wsUrl);
-
-  // Single-line string: no template literals, no newlines before <Response>
   const twiml =
     '<Response><Connect><ConversationRelay websocket-url="' + wsUrl +
     '" transcription-enabled="true" client-participant-identity="user_' +
-    userId + '" client-display-name="' +
-    firstName +
+    userId + '" client-display-name="' + firstName +
     '" bot-participant-identity="carelon_ai_agent" bot-display-name="Carelon AI Assistant"/></Connect></Response>';
 
   res.type('text/xml');
