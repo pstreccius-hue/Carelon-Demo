@@ -92,7 +92,8 @@ app.post('/api/ai-voice-convo', (req, res) => {
   </Connect>
 </Response>
   `;
-  res.type('text/xml').send(twiml);
+  res.header('Content-Type', 'text/xml');
+  res.send(twiml);
 });
 
 //-------- HEALTH --------//
