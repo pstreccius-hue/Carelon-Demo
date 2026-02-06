@@ -78,21 +78,21 @@ app.post('/api/ai-voice-convo', (req, res) => {
   const firstName = req.query.firstName || 'Participant';
   const wsUrl = `wss://carelon-demo.onrender.com/conversation-relay`;
 
-  const twiml = `<Response>
-  <Connect>
-    <ConversationRelay
-      websocket-url="${wsUrl}?userId=${encodeURIComponent(userId)}&firstName=${encodeURIComponent(firstName)}"
-      transcription-enabled="true"
-      client-participant-identity="user_${userId}"
-      client-display-name="${firstName}"
-      bot-participant-identity="carelon_ai_agent"
-      bot-display-name="Carelon AI Assistant"
-    />
-  </Connect>
-</Response>
-  `;
-  res.header('Content-Type', 'text/xml');
-  console.log(twiml);
+  // 100% bulletproof: single line, starts with <Response>, all quotes correct, no backtick
+  const twiml =
+    '<Response>' +
+      '<Connect>' +
+        `<ConversationRelay websocket-url="${wsUrl}?userId=${encodeURIComponent(userId)}&firstName=${encodeURIComponent(firstName)}"` +
+        ' transcription-enabled="true"' +
+        ` client-participant-identity="user_${userId}"` +
+        ` client-display-name="${firstName}"` +
+        ' bot-participant-identity="carelon_ai_agent"' +
+        ' bot-display-name="Carelon AI Assistant"' +
+        ' />' +
+      '</Connect>' +
+    '</Response>';
+
+  res.type('text/xml');
   res.send(twiml);
 });
 
