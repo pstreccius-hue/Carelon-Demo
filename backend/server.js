@@ -1,13 +1,13 @@
 const express = require('express');
 const http = require('http');
-const VoiceResponse = require('twilio').twiml.VoiceResponse;
+const { twiml: { VoiceResponse } } = require('twilio');
 const { sendIdentify, sendTrack } = require('./segment');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const { OpenAI } = require('openai');
 const { sendSms, sendVoice } = require('./twilio');
 const axios = require('axios');
-const { twiml: { VoiceResponse } } = require('twilio');
+
 const WebSocket = require('ws');
 require('dotenv').config();
 
