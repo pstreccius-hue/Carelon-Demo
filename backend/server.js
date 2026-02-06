@@ -6,8 +6,6 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const { OpenAI } = require('openai');
 const { sendSms, sendVoice } = require('./twilio');
-const axios = require('axios');
-
 const WebSocket = require('ws');
 require('dotenv').config();
 
@@ -31,7 +29,7 @@ app.post('/api/signup', async (req, res) => {
 });
 
 //----------------------------------------------------------
-// Conversation Relay TwiML Route - COPY THIS EXACTLY
+// Conversation Relay TwiML Route
 //----------------------------------------------------------
 app.all('/api/ai-voice-convo', (req, res) => {
   try {
@@ -40,7 +38,7 @@ app.all('/api/ai-voice-convo', (req, res) => {
     const safeFirstName = (firstName || "there").replace(/[^a-zA-Z\- ]/g, "");
     const safeProgram = (program || "our programs").replace(/[^a-zA-Z\- ]/g, "");
 
-    const wsUrl = `wss://carelon-demo.onrender.com/conversation-relay?userId=${encodeURIComponent(userId)}`;
+    const wsUrl = `wss://carelon-demo.onrender.com/conversation-relay?userId=${encodeURIComponent(userId)}&firstName=${encodeURIComponent(safeFirstName)}&program=${encodeURIComponent(safeProgram)}`;
     const welcomePrompt =
       `Hello, ${safeFirstName}! Welcome to the ${safeProgram} program. Would you like a quick overview? ` +
       `We also offer Wellness Coaching, Smoking Cessation, and Diabetes Prevention programs. ` +
@@ -86,22 +84,26 @@ wss.on('connection', (ws, req) => {
   ws.on('message', async (message) => {
     try {
       const data = JSON.parse(message);
+      // Grab query params from initial websocket URL for context (for /conversation-relay?userId=...&firstName=...&program=...)
+      const parsedUrl = req.url ? new URL('http://x' + req.url) : null;
+      const userId = parsedUrl ? parsedUrl.searchParams.get('userId') || 'anonymous' : 'anonymous';
+      const firstName = parsedUrl ? parsedUrl.searchParams.get('firstName') || 'there' : 'there';
+      const program = parsedUrl ? parsedUrl.searchParams.get('program') || 'our programs' : 'our programs';
+
       if (data.event === 'start') {
         ws.send(JSON.stringify({
           event: 'playText',
           participantIdentity: data.botParticipantIdentity,
-          text: `Hello, ${req.url && new URL('http://x' + req.url).searchParams.get("firstName") || "there"}! How can I help you today?`,
+          text: `Hello, ${firstName}! Welcome to the ${program} program. Would you like a quick overview? We also offer Wellness Coaching, Smoking Cessation, and Diabetes Prevention programs. Would you like to hear a summary of these, or enroll in a different program today?`,
         }));
       }
       else if (data.event === 'transcription') {
         const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
         const userText = data.transcription?.transcript || '';
-        const userId = req.url && new URL('http://x' + req.url).searchParams.get("userId");
-        const firstName = req.url && new URL('http://x' + req.url).searchParams.get("firstName");
+        // Use a system prompt that guides the AI to give program overviews and offer enrollments
         const systemPrompt =
-  `You are Carelon Health's automated agent. After your greeting, if the user requests a program overview, provide a clear, high-level (but non-clinical, non-PII) description ` +
-  `of the ${safeProgram} program and summarize the other programs: Wellness Coaching, Smoking Cessation, Diabetes Prevention. ` +
-  `If the user expresses interest in another program, prompt to confirm enrollment, then log "ENROLL: <program name>". Never provide medical advice or handle personal information.`;
+          `You are Carelon Health's automated agent. Provide a friendly, high-level (never clinical or with PII) overview of the "${program}" program if asked, and describe the other programs: Wellness Coaching, Smoking Cessation, Diabetes Prevention. If the user wants to enroll, state "ENROLL: <Program Name>" in your reply. Never provide medical advice.`;
+
         const messages = [
           { role: "system", content: systemPrompt },
           { role: "user", content: userText }
@@ -117,12 +119,20 @@ wss.on('connection', (ws, req) => {
           text: reply,
         }));
 
+        // --- SEGMENT ENROLLMENT TRACKING ---
         const signupMatch = reply.match(/ENROLL: ([A-Za-z ]+)/i);
         if (signupMatch) {
-          await axios.post('https://api.segment.io/v1/identify', {
-            userId: userId,
-            traits: { additional_program: signupMatch[1] }
-          }, { auth: { username: process.env.SEGMENT_WRITE_KEY, password: "" } });
+          const newProgram = signupMatch[1].trim();
+          // Track the enrollment analytics event
+          await sendTrack(
+            { phone: userId }, // mimic your 'user' obj at signup, or pass just userId if your helper supports it
+            'Program Enrolled',
+            { program: newProgram }
+          );
+          // Update user trait (latest enrollment)
+          await sendIdentify(
+            { phone: userId, last_enrolled_program: newProgram }
+          );
         }
       }
     } catch (err) {
