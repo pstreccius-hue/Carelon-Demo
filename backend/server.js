@@ -33,6 +33,7 @@ app.post('/api/signup', async (req, res) => {
 // Conversation Relay TwiML Route - COPY THIS EXACTLY
 //----------------------------------------------------------
 app.all('/api/ai-voice-convo', (req, res) => {
+  console.log('CONVORELAY HANDLER RUNNING');
   const userId = req.query.phone || 'anonymous';
   // No firstName
   let wsUrl = 'wss://carelon-demo.onrender.com/conversation-relay?userId=' + userId;
@@ -44,7 +45,7 @@ app.all('/api/ai-voice-convo', (req, res) => {
     '" client-display-name="Participant"' + // You can set this to whatever default you want
     ' bot-participant-identity="carelon_ai_agent" bot-display-name="Carelon AI Assistant"/></Connect></Response>';
   res.type('text/xml');
-  res.send(twiml);
+  res.send('<Response><Connect><ConversationRelay websocket-url="wss://carelon-demo.onrender.com/conversation-relay?foo=bar&amp;baz=qux" transcription-enabled="true"/></Connect></Response>');
 });
 
 //----------------------------------------------------------
