@@ -76,7 +76,7 @@ app.post('/api/voice-twiml-loop', async (req, res) => {
 app.post('/api/ai-voice-convo', (req, res) => {
   const userId = req.query.phone || 'anonymous';
   const firstName = req.query.firstName || 'Participant';
-  const wsUrl = `wss://${process.env.RENDER_EXTERNAL_HOSTNAME || 'your-app.onrender.com'}/conversation-relay`;
+  const wsUrl = `wss://carelon-demo.onrender.com/conversation-relay`;
 
   const twiml = `
 <Response>
