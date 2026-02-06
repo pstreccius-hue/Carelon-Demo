@@ -10,5 +10,5 @@ exports.sendVoice = (to, name, program) =>
   client.calls.create({
     to,
     from: TWILIO_NUMBER,
-    url: `https://carelon-demo.onrender.com/api/ai-voice-convo?firstName=${encodeURIComponent(name.split(' ')[0])}&program=${encodeURIComponent(program)}&phone=${encodeURIComponent(to)}`
+    url: `https://YOUR-RENDER-APP.onrender.com/api/ai-voice-convo?firstName=${encodeURIComponent(name.split(' ')[0])}&program=${encodeURIComponent(program)}&phone=${encodeURIComponent(to)}`
   });
