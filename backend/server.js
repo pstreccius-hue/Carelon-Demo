@@ -7,6 +7,7 @@ const cors = require('cors');
 const { OpenAI } = require('openai');
 const { sendSms, sendVoice } = require('./twilio');
 const axios = require('axios');
+const { twiml: { VoiceResponse } } = require('twilio');
 const WebSocket = require('ws');
 require('dotenv').config();
 
@@ -35,19 +36,20 @@ app.post('/api/signup', async (req, res) => {
 app.all('/api/ai-voice-convo', (req, res) => {
   try {
     const userId = req.query.phone || 'anonymous';
-    console.log('ai-voice-convo called, param phone:', req.query.phone);
-
-    let wsUrl = 'wss://carelon-demo.onrender.com/conversation-relay?userId=' + userId;
-    wsUrl = wsUrl.replace(/&/g, '&amp;');
-    const twiml =
-      '<Response><Connect><ConversationRelay websocket-url="' + wsUrl +
-      '" transcription-enabled="true" client-participant-identity="user_' + userId +
-      '" client-display-name="Participant"' +
-      ' bot-participant-identity="carelon_ai_agent" bot-display-name="Carelon AI Assistant"/></Connect></Response>';
-
-    console.log('Sending TwiML:', twiml);
+    const wsUrl = `wss://carelon-demo.onrender.com/conversation-relay?userId=${userId}`;
+    const response = new VoiceResponse();
+    const connect = response.connect();
+    connect.conversationRelay({
+      url: wsUrl,
+      transcriptionEnabled: true,
+      clientParticipantIdentity: `user_${userId}`,
+      clientDisplayName: 'Participant',
+      botParticipantIdentity: 'carelon_ai_agent',
+      botDisplayName: 'Carelon AI Assistant',
+      welcomeGreeting: `Hello, ${userId}! How can I help you today?` // Optional
+    });
     res.type('text/xml');
-    res.send(twiml);
+    res.send(response.toString());
   } catch (err) {
     console.error('ai-voice-convo error:', err);
     res.status(500).send('Internal error');
