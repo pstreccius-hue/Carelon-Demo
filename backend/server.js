@@ -69,6 +69,8 @@ app.post('/api/voice-twiml-loop', async (req, res) => {
     twiml.hangup();
   }
   res.type('text/xml');
+  console.log('TwiML sent to Twilio:');
+  console.log(twiml);
   res.send(twiml.toString());
 });
 
