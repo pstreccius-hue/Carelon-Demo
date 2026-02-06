@@ -33,23 +33,23 @@ app.post('/api/signup', async (req, res) => {
 // Conversation Relay TwiML Route - COPY THIS EXACTLY
 //----------------------------------------------------------
 app.all('/api/ai-voice-convo', (req, res) => {
-  // Use raw value, not encodeURIComponent
-  const userId = req.query.phone || 'anonymous';     // Value will be '+17017211093'
-const firstName = req.query.firstName || 'Participant';
+  const userId = req.query.phone || 'anonymous'; // no encoding!
+  const firstName = req.query.firstName || 'Participant';
 
-let wsUrl = 'wss://carelon-demo.onrender.com/conversation-relay?userId=' +
-    userId +   // Use as-is -- do *not* apply encodeURIComponent here!
-    '&firstName=' + firstName;
-wsUrl = wsUrl.replace(/&/g, '&amp;');
+  let wsUrl =
+    'wss://carelon-demo.onrender.com/conversation-relay?userId=' +
+    userId +
+    '&firstName=' +
+    firstName;
+  wsUrl = wsUrl.replace(/&/g, '&amp;'); // XML compliance fix
 
-const twiml =
-  '<Response><Connect><ConversationRelay websocket-url="' + wsUrl +
-  '" transcription-enabled="true" client-participant-identity="user_' + userId +
-  '" client-display-name="' + firstName +
-  '" bot-participant-identity="carelon_ai_agent" bot-display-name="Carelon AI Assistant"/></Connect></Response>';
-
-res.type('text/xml');
-res.send(twiml);
+  const twiml =
+    '<Response><Connect><ConversationRelay websocket-url="' + wsUrl +
+    '" transcription-enabled="true" client-participant-identity="user_' + userId +
+    '" client-display-name="' + firstName +
+    '" bot-participant-identity="carelon_ai_agent" bot-display-name="Carelon AI Assistant"/></Connect></Response>';
+  res.type('text/xml');
+  res.send(twiml);
 });
 
 //----------------------------------------------------------
