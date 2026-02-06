@@ -76,20 +76,24 @@ app.post('/api/voice-twiml-loop', async (req, res) => {
 
 //-------- Conversation Relay TwiML Route --------//
 app.all('/api/ai-voice-convo', (req, res) => {
-  // ...
+  const userId = req.query.phone || 'anonymous';
+  const firstName = req.query.firstName || 'Participant';
   let wsUrl = 'wss://carelon-demo.onrender.com/conversation-relay?userId=' +
-    encodeURIComponent(req.query.phone || 'anonymous') +
-    '&firstName=' + encodeURIComponent(req.query.firstName || 'Participant');
-  wsUrl = wsUrl.replace(/&/g, '&amp;');
-  const twiml = '<Response><Connect><ConversationRelay websocket-url="' +
-    wsUrl +
-    '" transcription-enabled="true" client-participant-identity="user_' +
-    req.query.phone +
-    '" client-display-name="' +
-    (req.query.firstName || 'Participant') +
+      encodeURIComponent(userId) + '&firstName=' + encodeURIComponent(firstName);
+
+  function xmlEscapeUrl(url) {
+    const idx = url.indexOf('?');
+    if (idx === -1) return url;
+    return url.substring(0, idx + 1) + url.substring(idx + 1).replace(/&/g, '&amp;');
+  }
+  wsUrl = xmlEscapeUrl(wsUrl);
+
+  const twiml = '<Response><Connect><ConversationRelay websocket-url="' + wsUrl +
+    '" transcription-enabled="true" client-participant-identity="user_' + userId +
+    '" client-display-name="' + firstName +
     '" bot-participant-identity="carelon_ai_agent" bot-display-name="Carelon AI Assistant"/></Connect></Response>';
+
   res.type('text/xml');
-  console.log('TwiML output:', twiml);
   res.send(twiml);
 });
 
