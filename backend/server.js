@@ -91,71 +91,68 @@ const wss = new WebSocket.Server({ server, path: '/conversation-relay' });
 wss.on('connection', (ws, req) => {
   console.log('ConversationRelay WebSocket connected!');
   ws.on('message', async (message) => {
-    try {
-      const data = JSON.parse(message);
-      // Grab query params from initial websocket URL for context (for /conversation-relay?userId=...&firstName=...&program=...)
-      const parsedUrl = req.url ? new URL('http://x' + req.url) : null;
-      const userId = parsedUrl ? parsedUrl.searchParams.get('userId') || 'anonymous' : 'anonymous';
-      const firstName = parsedUrl ? parsedUrl.searchParams.get('firstName') || 'there' : 'there';
-      const program = parsedUrl ? parsedUrl.searchParams.get('program') || 'our programs' : 'our programs';
+  try {
+    const data = JSON.parse(message);
+    // Grab query params from initial websocket URL for context
+    const parsedUrl = req.url ? new URL('http://x' + req.url) : null;
+    const userId = parsedUrl ? parsedUrl.searchParams.get('userId') || 'anonymous' : 'anonymous';
+    const firstName = parsedUrl ? parsedUrl.searchParams.get('firstName') || 'there' : 'there';
+    const program = parsedUrl ? parsedUrl.searchParams.get('program') || 'our programs' : 'our programs';
 
-      if (data.event === 'start') {
-        ws.send(JSON.stringify({
-          event: 'playText',
-          participantIdentity: data.botParticipantIdentity,
-          text: `Hello, ${firstName}! Welcome to the ${program} program. Would you like a quick overview? We also offer Wellness Coaching, Smoking Cessation, and Diabetes Prevention programs. Would you like to hear a summary of these, or enroll in a different program today?`,
-        }));
-      }
-      else if (data.event === 'transcription') {
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const userText = data.transcription?.transcript || '';
-  console.log('TRANSCRIPTION FROM CALLER:', userText);
-
-  const systemPrompt = `You are Carelon Health's automated agent. Provide a friendly, high-level (never clinical or with PII) overview of the "${program}" program if asked, and describe the other programs: Wellness Coaching, Smoking Cessation, Diabetes Prevention. If the user wants to enroll, state "ENROLL: <Program Name>" in your reply. Never provide medical advice.`;
-  const messages = [
-    { role: "system", content: systemPrompt },
-    { role: "user", content: userText }
-  ];
-
-  // Before calling OpenAI, log
-  console.log('Sending to OpenAI:', messages);
-
-  const aiRes = await openai.chat.completions.create({
-    model: 'gpt-3.5-turbo',
-    messages,
-  });
-
-  const reply = aiRes.choices[0].message.content;
-  console.log('AI REPLY:', reply);
-
-  ws.send(JSON.stringify({
-    event: 'playText',
-    participantIdentity: data.botParticipantIdentity,
-    text: reply,
-  }));
-}
-
-        // --- SEGMENT ENROLLMENT TRACKING ---
-        const signupMatch = reply.match(/ENROLL: ([A-Za-z ]+)/i);
-        if (signupMatch) {
-          const newProgram = signupMatch[1].trim();
-          // Track the enrollment analytics event
-          await sendTrack(
-            { phone: userId }, // mimic your 'user' obj at signup, or pass just userId if your helper supports it
-            'Program Enrolled',
-            { program: newProgram }
-          );
-          // Update user trait (latest enrollment)
-          await sendIdentify(
-            { phone: userId, last_enrolled_program: newProgram }
-          );
-        }
-      }
-    } catch (err) {
-      console.log('WebSocket error:', err);
+    if (data.event === 'start') {
+      ws.send(JSON.stringify({
+        event: 'playText',
+        participantIdentity: data.botParticipantIdentity,
+        text: `Hello, ${firstName}! Welcome to the ${program} program. Would you like a quick overview? We also offer Wellness Coaching, Smoking Cessation, and Diabetes Prevention programs. Would you like to hear a summary of these, or enroll in a different program today?`,
+      }));
     }
-  });
-  ws.on('close', () => {
+    else if (data.event === 'transcription') {
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const userText = data.transcription?.transcript || '';
+      console.log('TRANSCRIPTION FROM CALLER:', userText);
+
+      const systemPrompt = `You are Carelon Health's automated agent. Provide a friendly, high-level (never clinical or with PII) overview of the "${program}" program if asked, and describe the other programs: Wellness Coaching, Smoking Cessation, Diabetes Prevention. If the user wants to enroll, state "ENROLL: <Program Name>" in your reply. Never provide medical advice.`;
+      const messages = [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userText }
+      ];
+
+      console.log('Sending to OpenAI:', messages);
+
+      const aiRes = await openai.chat.completions.create({
+        model: 'gpt-3.5-turbo',
+        messages,
+      });
+
+      const reply = aiRes.choices[0].message.content;
+      console.log('AI REPLY:', reply);
+
+      ws.send(JSON.stringify({
+        event: 'playText',
+        participantIdentity: data.botParticipantIdentity,
+        text: reply,
+      }));
+
+      // --- SEGMENT ENROLLMENT TRACKING ---
+      const signupMatch = reply.match(/ENROLL: ([A-Za-z ]+)/i);
+      if (signupMatch) {
+        const newProgram = signupMatch[1].trim();
+        // Track the enrollment analytics event
+        await sendTrack(
+          { phone: userId },
+          'Program Enrolled',
+          { program: newProgram }
+        );
+        // Update user trait (latest enrollment)
+        await sendIdentify(
+          { phone: userId, last_enrolled_program: newProgram }
+        );
+      }
+    }
+  } catch (err) {
+    console.log('WebSocket error:', err);
+  }
+});
     console.log('ConversationRelay WebSocket disconnected');
   });
 });
