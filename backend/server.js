@@ -33,6 +33,15 @@ app.post('/api/signup', async (req, res) => {
 //----------------------------------------------------------
 app.all('/api/ai-voice-convo', (req, res) => {
   try {
+    function xmlEscape(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
     const { phone, firstName, program } = req.query;
     const userId = phone || 'anonymous';
     const safeFirstName = (firstName || "there").replace(/[^a-zA-Z\- ]/g, "");
@@ -48,13 +57,13 @@ app.all('/api/ai-voice-convo', (req, res) => {
       `<Response>
          <Connect>
            <ConversationRelay
-             url="${wsUrl}"
+             url="${xmlEscape(wsUrl)}"
              transcriptionEnabled="true"
-             clientParticipantIdentity="user_${userId}"
+             clientParticipantIdentity="${xmlEscape("user_" + userId)}"
              clientDisplayName="Participant"
              botParticipantIdentity="carelon_ai_agent"
              botDisplayName="Carelon AI Assistant"
-             welcomeGreeting="${welcomePrompt.replace(/"/g, '&quot;')}"
+             welcomeGreeting="${xmlEscape(welcomePrompt)}"
            />
          </Connect>
        </Response>`;
