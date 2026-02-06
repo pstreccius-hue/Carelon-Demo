@@ -111,7 +111,7 @@ wss.on('connection', (ws, req) => {
   const userText = data.transcription?.transcript || '';
   console.log('TRANSCRIPTION FROM CALLER:', userText);
 
-  const systemPrompt = /* ... same as before ... */;
+  const systemPrompt = `You are Carelon Health's automated agent. Provide a friendly, high-level (never clinical or with PII) overview of the "${program}" program if asked, and describe the other programs: Wellness Coaching, Smoking Cessation, Diabetes Prevention. If the user wants to enroll, state "ENROLL: <Program Name>" in your reply. Never provide medical advice.`;
   const messages = [
     { role: "system", content: systemPrompt },
     { role: "user", content: userText }
