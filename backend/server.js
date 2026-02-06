@@ -107,26 +107,33 @@ wss.on('connection', (ws, req) => {
         }));
       }
       else if (data.event === 'transcription') {
-        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-        const userText = data.transcription?.transcript || '';
-        // Use a system prompt that guides the AI to give program overviews and offer enrollments
-        const systemPrompt =
-          `You are Carelon Health's automated agent. Provide a friendly, high-level (never clinical or with PII) overview of the "${program}" program if asked, and describe the other programs: Wellness Coaching, Smoking Cessation, Diabetes Prevention. If the user wants to enroll, state "ENROLL: <Program Name>" in your reply. Never provide medical advice.`;
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const userText = data.transcription?.transcript || '';
+  console.log('TRANSCRIPTION FROM CALLER:', userText);
 
-        const messages = [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userText }
-        ];
-        const aiRes = await openai.chat.completions.create({
-          model: 'gpt-3.5-turbo',
-          messages,
-        });
-        const reply = aiRes.choices[0].message.content;
-        ws.send(JSON.stringify({
-          event: 'playText',
-          participantIdentity: data.botParticipantIdentity,
-          text: reply,
-        }));
+  const systemPrompt = /* ... same as before ... */;
+  const messages = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userText }
+  ];
+
+  // Before calling OpenAI, log
+  console.log('Sending to OpenAI:', messages);
+
+  const aiRes = await openai.chat.completions.create({
+    model: 'gpt-3.5-turbo',
+    messages,
+  });
+
+  const reply = aiRes.choices[0].message.content;
+  console.log('AI REPLY:', reply);
+
+  ws.send(JSON.stringify({
+    event: 'playText',
+    participantIdentity: data.botParticipantIdentity,
+    text: reply,
+  }));
+}
 
         // --- SEGMENT ENROLLMENT TRACKING ---
         const signupMatch = reply.match(/ENROLL: ([A-Za-z ]+)/i);
