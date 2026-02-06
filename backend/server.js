@@ -76,16 +76,20 @@ app.post('/api/voice-twiml-loop', async (req, res) => {
 
 //-------- Conversation Relay TwiML Route --------//
 app.all('/api/ai-voice-convo', (req, res) => {
-  const userId = req.query.phone || 'anonymous';
-  const firstName = req.query.firstName || 'Participant';
-  // Build URL using normal &
-  let wsUrl = 'wss://carelon-demo.onrender.com/conversation-relay?userId=' + encodeURIComponent(userId) + '&firstName=' + encodeURIComponent(firstName);
-  // Replace & with &amp; for XML
+  // ...
+  let wsUrl = 'wss://carelon-demo.onrender.com/conversation-relay?userId=' +
+    encodeURIComponent(req.query.phone || 'anonymous') +
+    '&firstName=' + encodeURIComponent(req.query.firstName || 'Participant');
   wsUrl = wsUrl.replace(/&/g, '&amp;');
-  // Build the TwiML in a single, classic JS string
-  const twiml = '<Response><Connect><ConversationRelay websocket-url="' + wsUrl + '" transcription-enabled="true" client-participant-identity="user_' + userId + '" client-display-name="' + firstName + '" bot-participant-identity="carelon_ai_agent" bot-display-name="Carelon AI Assistant"/></Connect></Response>';
-
+  const twiml = '<Response><Connect><ConversationRelay websocket-url="' +
+    wsUrl +
+    '" transcription-enabled="true" client-participant-identity="user_' +
+    req.query.phone +
+    '" client-display-name="' +
+    (req.query.firstName || 'Participant') +
+    '" bot-participant-identity="carelon_ai_agent" bot-display-name="Carelon AI Assistant"/></Connect></Response>';
   res.type('text/xml');
+  console.log('TwiML output:', twiml);
   res.send(twiml);
 });
 
