@@ -1,4 +1,5 @@
 const express = require('express');
+const http = require('http');
 const VoiceResponse = require('twilio').twiml.VoiceResponse;
 const { sendIdentify, sendTrack } = require('./segment');
 const bodyParser = require('body-parser');
@@ -6,10 +7,10 @@ const cors = require('cors');
 const { OpenAI } = require('openai');
 const { sendSms, sendVoice } = require('./twilio');
 const axios = require('axios');
+const WebSocket = require('ws');
 require('dotenv').config();
 
 const app = express();
-
 app.use(cors({ origin: '*' }));
 app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true }));
@@ -28,14 +29,13 @@ app.post('/api/signup', async (req, res) => {
   }
 });
 
-//-------- TwiML Demo (Repeat/Press 1) --------//
+//-------- DTMF DEMO (optional, remove if not needed) --------//
 app.post('/api/voice-twiml', (req, res) => {
   const name = req.query.name || 'Participant';
   const program = req.query.program || 'your program';
   const phone = req.query.phone || '';
 
   const twiml = new VoiceResponse();
-
   const gather = twiml.gather({
     input: 'dtmf',
     numDigits: 1,
@@ -46,7 +46,6 @@ app.post('/api/voice-twiml', (req, res) => {
     { voice: 'Polly.Kimberly', language: 'en-US' },
     `Hello ${name}, this is Carelon Health! Congratulations on starting the ${program} program. Press 1 to hear this message again.`
   );
-
   res.type('text/xml');
   res.send(twiml.toString());
 });
@@ -56,7 +55,6 @@ app.post('/api/voice-twiml-loop', async (req, res) => {
   const program = req.query.program || 'your program';
   const phone = req.query.phone || '';
   const digit = req.body.Digits;
-
   const twiml = new VoiceResponse();
 
   if (digit === '1') {
@@ -70,81 +68,88 @@ app.post('/api/voice-twiml-loop', async (req, res) => {
     twiml.say({ voice: 'Polly.Kimberly', language: 'en-US' }, 'Goodbye.');
     twiml.hangup();
   }
-
   res.type('text/xml');
   res.send(twiml.toString());
 });
 
-//-------- AI Agent Conversational Voice Route --------//
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const convoState = {}; // Simple in-memory, use Redis/DB for scale
-
-app.post('/api/ai-voice-convo', async (req, res) => {
-  const callSid = req.body.CallSid;
-  const program = req.query.program || 'a Carelon Health program';
+//-------- Conversation Relay TwiML Route --------//
+app.post('/api/ai-voice-convo', (req, res) => {
+  const userId = req.query.phone || 'anonymous';
   const firstName = req.query.firstName || 'Participant';
+  const wsUrl = `wss://${process.env.RENDER_EXTERNAL_HOSTNAME || 'your-app.onrender.com'}/conversation-relay`;
 
-  const programOverviews = {
-    "Diabetes Prevention": "Diabetes Prevention helps you adopt healthy habits to minimize your risk through lifestyle changes, coaching, and nutrition support.",
-    "Heart Health": "Heart Health provides guidance and encouragement for a stronger cardiovascular system, including exercise, nutrition, and regular check-ins.",
-    "Weight Loss": "Weight Loss helps you safely and sustainably shed pounds with personal coaching, nutrition tips, and weekly accountability."
-  };
-  const overview = programOverviews[program] || '';
-
-  let lastAIReply;
-  if (req.body.SpeechResult) {
-    convoState[callSid] = convoState[callSid] || [];
-    convoState[callSid].push({ role: 'user', content: req.body.SpeechResult });
-
-    // ------ PERSONALIZED PROMPT with FIRST NAME ------
-    const systemPrompt = `You are Carelon Health's automated agent. When you greet the caller, say "Hello, ${firstName}!" before giving a friendly, concise overview of the "${program}" program: "${overview}". Do NOT answer personal health or PII questions—advise the caller to talk to their provider. It is okay to give an overview of what other programs entail, just keep it high level and not person specific. For enrollment, say ENROLL: <program>.`;
-    const messages = [
-      { role: "system", content: systemPrompt },
-      ...(convoState[callSid] || [])
-    ];
-    const aiRes = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo', // or 'gpt-4'
-      messages,
-    });
-    lastAIReply = aiRes.choices[0].message.content;
-    convoState[callSid].push({ role: 'assistant', content: lastAIReply });
-
-    const signupMatch = lastAIReply.match(/ENROLL: ([A-Za-z ]+)/i);
-    if (signupMatch) {
-      await axios.post('https://api.segment.io/v1/identify', {
-        userId: req.body.To, // <-- user/recipient's phone number
-        traits: { additional_program: signupMatch[1] }
-      }, { auth: { username: process.env.SEGMENT_WRITE_KEY, password: "" } });
-    }
-
-  } else {
-    // ------ FIRST PROMPT with FIRST NAME ------
-    const firstPrompt = `You are Carelon Health's automated agent. Greet the caller by saying "Hello, ${firstName}!" and give a brief but welcoming overview of the "${program}" program: "${overview}".`;
-    const aiRes = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
-      messages: [{ role: "system", content: firstPrompt }]
-    });
-    lastAIReply = aiRes.choices[0].message.content;
-    convoState[callSid] = [{ role: 'assistant', content: lastAIReply }];
-  }
-
-  const twiml = new VoiceResponse();
-  const gather = twiml.gather({
-    input: 'speech',
-    timeout: 5,
-    action: '/api/ai-voice-convo',
-    method: 'POST'
-  });
-  gather.say({ voice: 'Polly.Kimberly', language: 'en-US' }, lastAIReply);
-
-  twiml.say({ voice: 'Polly.Kimberly', language: 'en-US' }, "Thank you for your time. Goodbye!");
-  twiml.hangup();
-
-  res.type('text/xml');
-  res.send(twiml.toString());
+  const twiml = `
+<Response>
+  <Connect>
+    <ConversationRelay
+      websocket-url="${wsUrl}?userId=${encodeURIComponent(userId)}&firstName=${encodeURIComponent(firstName)}"
+      transcription-enabled="true"
+      client-participant-identity="user_${userId}"
+      client-display-name="${firstName}"
+      bot-participant-identity="carelon_ai_agent"
+      bot-display-name="Carelon AI Assistant"
+    />
+  </Connect>
+</Response>
+  `;
+  res.type('text/xml').send(twiml);
 });
 
+//-------- HEALTH --------//
 app.get('/health', (req, res) => res.send('OK'));
 
-app.listen(process.env.PORT || 3001, () => console.log('Backend running on 3001'));
+//------ CREATE HTTP + WebSocket SERVER ------//
+const server = http.createServer(app);
+server.listen(process.env.PORT || 3001, () => console.log('Backend running on 3001'));
+
+//------ ConversationRelay WebSocket Handler ------//
+const wss = new WebSocket.Server({ server, path: '/conversation-relay' });
+wss.on('connection', (ws, req) => {
+  console.log('ConversationRelay WebSocket connected!');
+  ws.on('message', async (message) => {
+    try {
+      const data = JSON.parse(message);
+      if (data.event === 'start') {
+        ws.send(JSON.stringify({
+          event: 'playText',
+          participantIdentity: data.botParticipantIdentity,
+          text: `Hello, ${req.url && new URL('http://x' + req.url).searchParams.get("firstName") || "there"}! How can I help you today?`,
+        }));
+      }
+      else if (data.event === 'transcription') {
+        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const userText = data.transcription?.transcript || '';
+        const userId = req.url && new URL('http://x' + req.url).searchParams.get("userId");
+        const firstName = req.url && new URL('http://x' + req.url).searchParams.get("firstName");
+        const systemPrompt = `You are Carelon Health's automated agent. Always greet by first name (${firstName}). Answer high-level program questions, never specific treatment/PII.`;
+        const messages = [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userText }
+        ];
+        const aiRes = await openai.chat.completions.create({
+          model: 'gpt-3.5-turbo',
+          messages,
+        });
+        const reply = aiRes.choices[0].message.content;
+        ws.send(JSON.stringify({
+          event: 'playText',
+          participantIdentity: data.botParticipantIdentity,
+          text: reply,
+        }));
+
+        const signupMatch = reply.match(/ENROLL: ([A-Za-z ]+)/i);
+        if (signupMatch) {
+          await axios.post('https://api.segment.io/v1/identify', {
+            userId: userId,
+            traits: { additional_program: signupMatch[1] }
+          }, { auth: { username: process.env.SEGMENT_WRITE_KEY, password: "" } });
+        }
+      }
+    } catch (err) {
+      console.log('WebSocket error:', err);
+    }
+  });
+  ws.on('close', () => {
+    console.log('ConversationRelay WebSocket disconnected');
+  });
+});
