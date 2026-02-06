@@ -75,7 +75,7 @@ app.post('/api/voice-twiml-loop', async (req, res) => {
 });
 
 //-------- Conversation Relay TwiML Route --------//
-app.post('/api/ai-voice-convo', (req, res) => {
+app.all('/api/ai-voice-convo', (req, res) => {
   const userId = req.query.phone || 'anonymous';
   const firstName = req.query.firstName || 'Participant';
   const wsUrl = `wss://carelon-demo.onrender.com/conversation-relay`;
