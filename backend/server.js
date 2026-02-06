@@ -79,9 +79,8 @@ app.all('/api/ai-voice-convo', (req, res) => {
   const userId = req.query.phone || 'anonymous';
   const firstName = req.query.firstName || 'Participant';
 
-  // Compose URL and encode '&' for XML
-  let wsUrl = `wss://carelon-demo.onrender.com/conversation-relay?userId=${encodeURIComponent(userId)}&ampfirstName=${encodeURIComponent(firstName)}`;
- 
+  let wsUrl = `wss://carelon-demo.onrender.com/conversation-relay?userId=${encodeURIComponent(userId)}&firstName=${encodeURIComponent(firstName)}`;
+  wsUrl = wsUrl.replace(/&/g, '&amp;');  // ← This is key
 
   const twiml = `<Response>
 <Connect>
@@ -95,7 +94,6 @@ app.all('/api/ai-voice-convo', (req, res) => {
 />
 </Connect>
 </Response>`;
-
   res.type('text/xml');
   res.send(twiml);
 });
