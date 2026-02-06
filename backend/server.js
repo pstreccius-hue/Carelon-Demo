@@ -54,7 +54,7 @@ app.all('/api/ai-voice-convo', (req, res) => {
              clientDisplayName="Participant"
              botParticipantIdentity="carelon_ai_agent"
              botDisplayName="Carelon AI Assistant"
-             welcomeGreeting="${welcomePrompt}"
+             welcomeGreeting="${welcomePrompt.replace(/"/g, '&quot;')}"
            />
          </Connect>
        </Response>`;
