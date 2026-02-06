@@ -78,21 +78,23 @@ app.post('/api/voice-twiml-loop', async (req, res) => {
 app.all('/api/ai-voice-convo', (req, res) => {
   const userId = req.query.phone || 'anonymous';
   const firstName = req.query.firstName || 'Participant';
-  const wsUrl = `wss://carelon-demo.onrender.com/conversation-relay`;
 
-  // 100% bulletproof: single line, starts with <Response>, all quotes correct, no backtick
-  const twiml =
-    '<Response>' +
-      '<Connect>' +
-        `<ConversationRelay websocket-url="${wsUrl}?userId=${encodeURIComponent(userId)}&firstName=${encodeURIComponent(firstName)}"` +
-        ' transcription-enabled="true"' +
-        ` client-participant-identity="user_${userId}"` +
-        ` client-display-name="${firstName}"` +
-        ' bot-participant-identity="carelon_ai_agent"' +
-        ' bot-display-name="Carelon AI Assistant"' +
-        ' />' +
-      '</Connect>' +
-    '</Response>';
+  // Compose URL and encode '&' for XML
+  let wsUrl = `wss://carelon-demo.onrender.com/conversation-relay?userId=${encodeURIComponent(userId)}&firstName=${encodeURIComponent(firstName)}`;
+  wsUrl = wsUrl.replace(/&/g, '&amp;'); // <- XML-safe ampersand
+
+  const twiml = `<Response>
+<Connect>
+<ConversationRelay
+  websocket-url="${wsUrl}"
+  transcription-enabled="true"
+  client-participant-identity="user_${userId}"
+  client-display-name="${firstName}"
+  bot-participant-identity="carelon_ai_agent"
+  bot-display-name="Carelon AI Assistant"
+/>
+</Connect>
+</Response>`;
 
   res.type('text/xml');
   res.send(twiml);
