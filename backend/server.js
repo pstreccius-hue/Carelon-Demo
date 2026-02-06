@@ -29,58 +29,19 @@ app.post('/api/signup', async (req, res) => {
   }
 });
 
-//-------- DTMF DEMO (optional, remove if not needed) --------//
-app.post('/api/voice-twiml', (req, res) => {
-  const name = req.query.name || 'Participant';
-  const program = req.query.program || 'your program';
-  const phone = req.query.phone || '';
-
-  const twiml = new VoiceResponse();
-  const gather = twiml.gather({
-    input: 'dtmf',
-    numDigits: 1,
-    timeout: 5,
-    action: `/api/voice-twiml-loop?name=${encodeURIComponent(name)}&program=${encodeURIComponent(program)}&phone=${encodeURIComponent(phone)}`
-  });
-  gather.say(
-    { voice: 'Polly.Kimberly', language: 'en-US' },
-    `Hello ${name}, this is Carelon Health! Congratulations on starting the ${program} program. Press 1 to hear this message again.`
-  );
-  res.type('text/xml');
-  res.send(twiml.toString());
-});
-
-app.post('/api/voice-twiml-loop', async (req, res) => {
-  const name = req.query.name || 'Participant';
-  const program = req.query.program || 'your program';
-  const phone = req.query.phone || '';
-  const digit = req.body.Digits;
-  const twiml = new VoiceResponse();
-
-  if (digit === '1') {
-    await sendTrack(
-      { name, phone, program },
-      "Voice: Requested Repeat Message",
-      { action: "Repeat", interaction: "Press 1", program }
-    );
-    twiml.redirect(`/api/voice-twiml?name=${encodeURIComponent(name)}&program=${encodeURIComponent(program)}&phone=${encodeURIComponent(phone)}`);
-  } else {
-    twiml.say({ voice: 'Polly.Kimberly', language: 'en-US' }, 'Goodbye.');
-    twiml.hangup();
-  }
-  res.type('text/xml');
-  console.log('TwiML sent to Twilio:');
-  console.log(twiml);
-  res.send(twiml.toString());
-});
-
-//-------- Conversation Relay TwiML Route --------//
+//----------------------------------------------------------
+// Conversation Relay TwiML Route - COPY THIS EXACTLY
+//----------------------------------------------------------
 app.all('/api/ai-voice-convo', (req, res) => {
   const userId = req.query.phone || 'anonymous';
   const firstName = req.query.firstName || 'Participant';
-  let wsUrl = 'wss://carelon-demo.onrender.com/conversation-relay?userId=' +
-      encodeURIComponent(userId) + '&firstName=' + encodeURIComponent(firstName);
 
+  // Use raw & while building, then replace only in XML:
+  let wsUrl = 'wss://carelon-demo.onrender.com/conversation-relay?userId=' +
+    encodeURIComponent(userId) +
+    '&firstName=' + encodeURIComponent(firstName);
+
+  // Only escape & after the ? for XML attribute
   function xmlEscapeUrl(url) {
     const idx = url.indexOf('?');
     if (idx === -1) return url;
@@ -88,23 +49,29 @@ app.all('/api/ai-voice-convo', (req, res) => {
   }
   wsUrl = xmlEscapeUrl(wsUrl);
 
-  const twiml = '<Response><Connect><ConversationRelay websocket-url="' + wsUrl +
-    '" transcription-enabled="true" client-participant-identity="user_' + userId +
-    '" client-display-name="' + firstName +
+  // Single-line string: no template literals, no newlines before <Response>
+  const twiml =
+    '<Response><Connect><ConversationRelay websocket-url="' + wsUrl +
+    '" transcription-enabled="true" client-participant-identity="user_' +
+    userId + '" client-display-name="' +
+    firstName +
     '" bot-participant-identity="carelon_ai_agent" bot-display-name="Carelon AI Assistant"/></Connect></Response>';
 
   res.type('text/xml');
   res.send(twiml);
 });
 
-//-------- HEALTH --------//
+//----------------------------------------------------------
+// HEALTHCHECK
+//----------------------------------------------------------
 app.get('/health', (req, res) => res.send('OK'));
 
-//------ CREATE HTTP + WebSocket SERVER ------//
+//----------------------------------------------------------
+// WebSocket Server for Conversation Relay
+//----------------------------------------------------------
 const server = http.createServer(app);
 server.listen(process.env.PORT || 3001, () => console.log('Backend running on 3001'));
 
-//------ ConversationRelay WebSocket Handler ------//
 const wss = new WebSocket.Server({ server, path: '/conversation-relay' });
 wss.on('connection', (ws, req) => {
   console.log('ConversationRelay WebSocket connected!');
@@ -123,7 +90,7 @@ wss.on('connection', (ws, req) => {
         const userText = data.transcription?.transcript || '';
         const userId = req.url && new URL('http://x' + req.url).searchParams.get("userId");
         const firstName = req.url && new URL('http://x' + req.url).searchParams.get("firstName");
-        const systemPrompt = `You are Carelon Health's automated agent. Always greet by first name (${firstName}). Answer high-level program questions, never specific treatment/PII.`;
+        const systemPrompt = `You are Carelon Health's automated agent. Greet by first name (${firstName}). Answer high-level program questions, never specific treatment/PII.`;
         const messages = [
           { role: "system", content: systemPrompt },
           { role: "user", content: userText }
