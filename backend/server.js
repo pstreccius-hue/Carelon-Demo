@@ -78,8 +78,7 @@ app.post('/api/ai-voice-convo', (req, res) => {
   const firstName = req.query.firstName || 'Participant';
   const wsUrl = `wss://carelon-demo.onrender.com/conversation-relay`;
 
-  const twiml = `
-<Response>
+  const twiml = `<Response>
   <Connect>
     <ConversationRelay
       websocket-url="${wsUrl}?userId=${encodeURIComponent(userId)}&firstName=${encodeURIComponent(firstName)}"
@@ -93,6 +92,7 @@ app.post('/api/ai-voice-convo', (req, res) => {
 </Response>
   `;
   res.header('Content-Type', 'text/xml');
+  console.log(twiml);
   res.send(twiml);
 });
 
