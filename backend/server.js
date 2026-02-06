@@ -33,17 +33,8 @@ app.post('/api/signup', async (req, res) => {
 // Conversation Relay TwiML Route - COPY THIS EXACTLY
 //----------------------------------------------------------
 app.all('/api/ai-voice-convo', (req, res) => {
-  const userId = req.query.phone || 'anonymous';
-  // No need for encodeURIComponent for ConversationRelay phone params!
-  let wsUrl = 'wss://carelon-demo.onrender.com/conversation-relay?userId=' + userId;
-  wsUrl = wsUrl.replace(/&/g, '&amp;');
-  const twiml =
-    '<Response><Connect><ConversationRelay websocket-url="' + wsUrl +
-    '" transcription-enabled="true" client-participant-identity="user_' + userId +
-    '" client-display-name="Participant"' +
-    ' bot-participant-identity="carelon_ai_agent" bot-display-name="Carelon AI Assistant"/></Connect></Response>';
   res.type('text/xml');
-  res.send(twiml); // <-- This is how you send the dynamic XML!
+  res.send('<Response><Say>Hello, this is a test call!</Say></Response>');
 });
 
 //----------------------------------------------------------
