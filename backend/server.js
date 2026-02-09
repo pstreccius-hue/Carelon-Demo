@@ -15,10 +15,12 @@ app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true }));
 
 //---- NEW: Conversation Intelligence Webhook ----//
-console.log('===== FULL WEBHOOK PAYLOAD =====');
-console.log(JSON.stringify(req.body, null, 2));
 app.post('/webhook/conversational-intelligence', async (req, res) => {
   try {
+    // Move your logging here, INSIDE the handler:
+    console.log('===== FULL WEBHOOK PAYLOAD =====');
+    console.log(JSON.stringify(req.body, null, 2));
+
     const operatorResults = req.body.operatorResults || [];
     if (operatorResults.length === 0) {
       return res.status(400).send('No operatorResults in payload');
@@ -26,16 +28,13 @@ app.post('/webhook/conversational-intelligence', async (req, res) => {
     // Process each operatorResult:
     for (const op of operatorResults) {
       const summary = op.result && op.result.explanation;
-      // Find CUSTOMER participant (adjust for real Twilio payload structure)
       let customerPhone = null;
       let customerProfileId = null;
       const customerParticipant = (op.executionDetails?.participants || []).find(p => p.type === 'CUSTOMER');
       if (customerParticipant) {
-        // Use phone if present, otherwise profileId
         customerPhone = customerParticipant.phone;
         customerProfileId = customerParticipant.profileId;
       }
-      // Prefer phone, fallback to profileId:
       let userId = customerPhone || customerProfileId;
       if (userId && summary) {
         await sendIdentify({
