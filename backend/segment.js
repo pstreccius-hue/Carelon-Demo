@@ -24,11 +24,13 @@ exports.sendIdentify = async (user) => {
   }
 };
 
-exports.sendTrack = ({ userId, event, properties }) => axios.post(
-  'https://api.segment.io/v1/track',
-  { userId, event, properties },
-  { auth: { username: SEGMENT_WRITE_KEY, password: '' } }
-);
+exports.sendTrack = async ({ userId, event, properties }) => {
+  try {
+    const response = await axios.post(
+      'https://api.segment.io/v1/track',
+      { userId, event, properties },
+      { auth: { username: SEGMENT_WRITE_KEY, password: '' } }
+    );
     console.log('Segment track response:', response.status, response.data);
     return response;
   } catch (err) {
