@@ -7,6 +7,7 @@ const cors = require('cors');
 const { OpenAI } = require('openai');
 const { sendSms, sendVoice } = require('./twilio');
 const WebSocket = require('ws');
+const axios = require('axios');
 require('dotenv').config();
 
 const app = express();
@@ -14,43 +15,58 @@ app.use(cors({ origin: '*' }));
 app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true }));
 
-//---- NEW: Conversation Intelligence Webhook ----//
+//---- Conversation Intelligence Webhook with Memory API Phone Lookup ----//
 app.post('/webhook/conversational-intelligence', async (req, res) => {
   try {
-     // Move your logging here, INSIDE the handler:
-    console.log('===== FULL WEBHOOK PAYLOAD =====');
+    console.log('===== FULL CI WEBHOOK PAYLOAD =====');
     console.log(JSON.stringify(req.body, null, 2));
     const operatorResults = req.body.operatorResults || [];
-    if (operatorResults.length === 0) {
-      return res.status(400).send('No operatorResults in payload');
-    }
-    // Process each operatorResult:
     for (const op of operatorResults) {
-      const summary = op.result && op.result.explanation;
-      // Find CUSTOMER participant (adjust for real Twilio payload structure)
-      let customerPhone = null;
-      let customerProfileId = null;
-      const customerParticipant = (op.executionDetails?.participants || []).find(p => p.type === 'CUSTOMER');
-      if (customerParticipant) {
-        // Use phone if present, otherwise profileId
-        customerPhone = customerParticipant.phone;
-        customerProfileId = customerParticipant.profileId;
-      }
-      // Prefer phone, fallback to profileId:
-      let userId = customerPhone || customerProfileId;
-      if (userId && summary) {
-        await sendIdentify({
-          userId,
-          traits: { most_recent_call_summary: summary }
-        });
-        console.log(`[CI webhook] Updated Segment for userId ${userId} with summary:`, summary);
-      } else {
-        console.warn('[CI webhook] Skipped posting to Segment - missing user or summary');
+      if (op.result && op.result.summary) {
+        const summary = op.result.summary;
+        // Extract profileId from CUSTOMER participant
+        const customerParticipant = (op.executionDetails?.participants || []).find(
+          p => p.type === 'CUSTOMER'
+        );
+        const profileId = customerParticipant && customerParticipant.profileId;
+        // Extract memoryStoreId safely from context
+        const memStoreId = op.executionDetails?.context?.customerMemory?.memoryStoreId || "YOUR_MEM_STORE_ID";
+        if (profileId && memStoreId) {
+          // Fetch profile from Twilio Memory API
+          try {
+            const twilioAuth = {
+              username: process.env.TWILIO_ACCOUNT_SID,
+              password: process.env.TWILIO_AUTH_TOKEN
+            };
+            const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
+            const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
+            const traits = profileResp.data.traits || {};
+            const phone = traits.phone || traits.phone_number;
+            if (phone) {
+              // Send event to Segment with phone as userId
+              await sendTrack({
+                userId: phone,
+                event: 'Call Summary',
+                properties: {
+                  most_recent_call_summary: summary,
+                  mem_profile_id: profileId
+                }
+              });
+              console.log(`[CI webhook] Sent Call Summary event to Segment for phone ${phone}`);
+            } else {
+              console.warn('[CI webhook] No phone found in Twilio Memory profile.', profileResp.data);
+            }
+          } catch (fetchErr) {
+            console.error('Error fetching Twilio Memory profile:', fetchErr?.response?.data || fetchErr.message);
+          }
+        } else {
+          console.warn('[CI webhook] Missing profileId or memStoreId.', { profileId, memStoreId });
+        }
       }
     }
     res.status(200).send('ok');
   } catch (err) {
-    console.error('CI Webhook Error:', err);
+    console.error("CI Webhook Error:", err);
     res.status(500).send('Webhook processing error');
   }
 });
@@ -116,6 +132,7 @@ app.all('/api/ai-voice-convo', (req, res) => {
     res.status(500).send('Internal error');
   }
 });
+
 
 //----------------------------------------------------------
 // HEALTHCHECK
