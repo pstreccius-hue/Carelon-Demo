@@ -80,7 +80,7 @@ app.post('/api/signup', async (req, res) => {
   try {
     await sendIdentify(user);
     await sendTrack({
-  userId: user.phone, // or whatever unique user identifier you use
+  userId: user.email || user.phone || user.name || 'anonymous-voice',
   event: "Program Enrolled",
   properties: { program: user.program }
 });
