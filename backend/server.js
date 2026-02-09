@@ -49,7 +49,7 @@ const phone =
               // Send event to Segment with phone as userId
               await sendTrack({
                 userId: phone,
-                event: 'Call Summary',
+                event: 'AI Gen Call Summary - Twilio Memora',
                 properties: {
                   most_recent_call_summary: summary,
                   mem_profile_id: profileId
