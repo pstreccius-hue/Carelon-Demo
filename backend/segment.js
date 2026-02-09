@@ -16,3 +16,10 @@ exports.sendTrack = (user, event, properties) => axios.post(
   },
   { auth: { username: SEGMENT_WRITE_KEY, password: '' } }
 );
+console.log('Segment track response:', response.status, response.data);
+    return response;
+  } catch (err) {
+    console.error('Segment track API Error:', err.response ? err.response.data : err.message);
+    throw err;
+  }
+}
