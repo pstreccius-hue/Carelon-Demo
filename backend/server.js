@@ -41,7 +41,10 @@ app.post('/webhook/conversational-intelligence', async (req, res) => {
             const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
             const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
             const traits = profileResp.data.traits || {};
-            const phone = traits.phone || traits.phone_number;
+const phone =
+  traits.phone ||
+  traits.phone_number ||
+  (traits.Contact && (traits.Contact.phone || traits.Contact.phone_number));
             if (phone) {
               // Send event to Segment with phone as userId
               await sendTrack({
