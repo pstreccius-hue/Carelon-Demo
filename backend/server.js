@@ -213,7 +213,7 @@ Always reply in a positive, conversational, and concise tone. When confirming en
             // Track the enrollment analytics event
             await sendTrack(
               { phone: userId },
-              'Program Enrolled',
+              'Additional Program Enrolled',
               { program: newProgram }
             );
             // Update user trait (latest enrollment)
