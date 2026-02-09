@@ -15,6 +15,8 @@ app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true }));
 
 //---- NEW: Conversation Intelligence Webhook ----//
+console.log('===== FULL WEBHOOK PAYLOAD =====');
+console.log(JSON.stringify(req.body, null, 2));
 app.post('/webhook/conversational-intelligence', async (req, res) => {
   try {
     const operatorResults = req.body.operatorResults || [];
