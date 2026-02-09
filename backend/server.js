@@ -35,8 +35,8 @@ app.post('/webhook/conversational-intelligence', async (req, res) => {
           // Fetch profile from Twilio Memory API
           try {
             const twilioAuth = {
-              username: process.env.TWILIO_ACCOUNT_SID,
-              password: process.env.TWILIO_AUTH_TOKEN
+              username: process.env.TWILIO_SID,
+              password: process.env.TWILIO_TOKEN
             };
             const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
             const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
