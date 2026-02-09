@@ -17,25 +17,34 @@ app.use(express.urlencoded({ extended: true }));
 //---- NEW: Conversation Intelligence Webhook ----//
 app.post('/webhook/conversational-intelligence', async (req, res) => {
   try {
-    console.log('Received CI webhook:', req.body);
-    // Extract call summary and customer profileId from operatorResult-style payload
-    const operatorResult = req.body;
-    const summary = operatorResult.result && operatorResult.result.explanation;
-    const customerParticipant = (operatorResult.executionDetails?.participants || [])
-      .find(part => part.type === 'CUSTOMER');
-    const customerProfileId = customerParticipant && customerParticipant.profileId;
-
-    if (!customerProfileId || !summary) {
-      console.warn('CI webhook: Missing participant or summary');
-      return res.status(400).send('Missing participant or summary');
+    const operatorResults = req.body.operatorResults || [];
+    if (operatorResults.length === 0) {
+      return res.status(400).send('No operatorResults in payload');
     }
-
-    // Update Segment profile - if possible, userId is profileId
-    await sendIdentify({
-      userId: customerProfileId,
-      traits: { most_recent_call_summary: summary }
-    });
-
+    // Process each operatorResult:
+    for (const op of operatorResults) {
+      const summary = op.result && op.result.explanation;
+      // Find CUSTOMER participant (adjust for real Twilio payload structure)
+      let customerPhone = null;
+      let customerProfileId = null;
+      const customerParticipant = (op.executionDetails?.participants || []).find(p => p.type === 'CUSTOMER');
+      if (customerParticipant) {
+        // Use phone if present, otherwise profileId
+        customerPhone = customerParticipant.phone;
+        customerProfileId = customerParticipant.profileId;
+      }
+      // Prefer phone, fallback to profileId:
+      let userId = customerPhone || customerProfileId;
+      if (userId && summary) {
+        await sendIdentify({
+          userId,
+          traits: { most_recent_call_summary: summary }
+        });
+        console.log(`[CI webhook] Updated Segment for userId ${userId} with summary:`, summary);
+      } else {
+        console.warn('[CI webhook] Skipped posting to Segment - missing user or summary');
+      }
+    }
     res.status(200).send('ok');
   } catch (err) {
     console.error('CI Webhook Error:', err);
