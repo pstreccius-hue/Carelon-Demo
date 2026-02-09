@@ -82,7 +82,7 @@ app.all('/api/ai-voice-convo', (req, res) => {
 app.get('/health', (req, res) => res.send('OK'));
 
 //----------------------------------------------------------
-// WebSocket Server for Conversation Relay
+// WebSocket Server for Conversation Relay - UPDATED PROTOCOL
 //----------------------------------------------------------
 const server = http.createServer(app);
 server.listen(process.env.PORT || 3001, () => console.log('Backend running on 3001'));
@@ -99,54 +99,62 @@ wss.on('connection', (ws, req) => {
       const firstName = parsedUrl ? parsedUrl.searchParams.get('firstName') || 'there' : 'there';
       const program = parsedUrl ? parsedUrl.searchParams.get('program') || 'our programs' : 'our programs';
 
-      if (data.event === 'start') {
-        ws.send(JSON.stringify({
-          event: 'playText',
-          participantIdentity: data.botParticipantIdentity,
-          text: `Hello, ${firstName}! Welcome to the ${program} program. Would you like a quick overview? We also offer Wellness Coaching, Smoking Cessation, and Diabetes Prevention programs. Would you like to hear a summary of these, or enroll in a different program today?`,
-        }));
-      } else if (data.event === 'transcription') {
-        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-        const userText = data.transcription?.transcript || '';
-        console.log('TRANSCRIPTION FROM CALLER:', userText);
+      switch (data.type) {
+        case "setup":
+          // Optional: session state can be initialized here
+          console.log("Setup event received:", data);
+          break;
+        case "prompt":
+          // Twilio sends voice transcription as `data.voicePrompt`
+          const userText = data.voicePrompt || '';
+          console.log('User said:', userText);
 
-        const systemPrompt = `You are Carelon Health's automated agent. Provide a friendly, high-level (never clinical or with PII) overview of the "${program}" program if asked, and describe the other programs: Wellness Coaching, Smoking Cessation, Diabetes Prevention. If the user wants to enroll, state "ENROLL: <Program Name>" in your reply. Never provide medical advice.`;
-        const messages = [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userText }
-        ];
+          const systemPrompt = `You are Carelon Health's automated agent. Provide a friendly, high-level (never clinical or with PII) overview of the "${program}" program if asked, and describe the other programs: Wellness Coaching, Smoking Cessation, Diabetes Prevention. If the user wants to enroll, state "ENROLL: <Program Name>" in your reply. Never provide medical advice.`;
+          const messages = [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userText }
+          ];
 
-        console.log('Sending to OpenAI:', messages);
+          console.log('Sending to OpenAI:', messages);
 
-        const aiRes = await openai.chat.completions.create({
-          model: 'gpt-3.5-turbo',
-          messages,
-        });
+          const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+          const aiRes = await openai.chat.completions.create({
+            model: 'gpt-3.5-turbo',
+            messages,
+          });
 
-        const reply = aiRes.choices[0].message.content;
-        console.log('AI REPLY:', reply);
+          const reply = aiRes.choices[0].message.content;
+          console.log('AI REPLY:', reply);
 
-        ws.send(JSON.stringify({
-          event: 'playText',
-          participantIdentity: data.botParticipantIdentity,
-          text: reply,
-        }));
+          // SEND IN THE EXPECTED FORMAT
+          ws.send(JSON.stringify({
+            type: "text",        // correct for ConversationRelay
+            token: reply,        // agent reply text
+            last: true
+          }));
 
-        // --- SEGMENT ENROLLMENT TRACKING ---
-        const signupMatch = reply.match(/ENROLL: ([A-Za-z ]+)/i);
-        if (signupMatch) {
-          const newProgram = signupMatch[1].trim();
-          // Track the enrollment analytics event
-          await sendTrack(
-            { phone: userId },
-            'Program Enrolled',
-            { program: newProgram }
-          );
-          // Update user trait (latest enrollment)
-          await sendIdentify(
-            { phone: userId, last_enrolled_program: newProgram }
-          );
-        }
+          // --- SEGMENT ENROLLMENT TRACKING ---
+          const signupMatch = reply.match(/ENROLL: ([A-Za-z ]+)/i);
+          if (signupMatch) {
+            const newProgram = signupMatch[1].trim();
+            // Track the enrollment analytics event
+            await sendTrack(
+              { phone: userId },
+              'Program Enrolled',
+              { program: newProgram }
+            );
+            // Update user trait (latest enrollment)
+            await sendIdentify(
+              { phone: userId, last_enrolled_program: newProgram }
+            );
+          }
+          break;
+        case "interrupt":
+          console.log("Received interrupt event");
+          break;
+        default:
+          console.warn("Unknown WebSocket message type:", data.type);
+          break;
       }
     } catch (err) {
       console.log('WebSocket error:', err);
