@@ -22,4 +22,4 @@ console.log('Segment track response:', response.status, response.data);
     console.error('Segment track API Error:', err.response ? err.response.data : err.message);
     throw err;
   }
-}
+
