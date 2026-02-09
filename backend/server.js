@@ -79,7 +79,11 @@ app.post('/api/signup', async (req, res) => {
   const user = req.body;
   try {
     await sendIdentify(user);
-    await sendTrack(user, "Program Enrolled", { program: user.program });
+    await sendTrack({
+  userId: user.phone, // or whatever unique user identifier you use
+  event: "Program Enrolled",
+  properties: { program: user.program }
+});
     await sendSms(user.phone, `Hi ${user.name}, welcome to the ${user.program}!`);
     await sendVoice(user.phone, user.name, user.program);
     res.json({ success: true, message: "Events sent and comms triggered." });
