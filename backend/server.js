@@ -15,7 +15,6 @@ app.use(cors({ origin: '*' }));
 app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Add this function to fetch Segment profile by phone
 async function getSegmentProfileByPhone(phone) {
   const SEGMENT_SPACE_ID = process.env.SEGMENT_SPACE_ID;
   const SEGMENT_PROFILE_TOKEN = process.env.SEGMENT_PROFILE_TOKEN;
@@ -83,7 +82,6 @@ app.post('/webhook/conversational-intelligence', async (req, res) => {
   }
 });
 
-//-------- SIGNUP FLOW --------//
 app.post('/api/signup', async (req, res) => {
   const user = req.body;
   try {
@@ -102,9 +100,9 @@ app.post('/api/signup', async (req, res) => {
 });
 
 //----------------------------------------------------------
-// Conversation Relay TwiML Route
+// Conversation Relay TwiML Route -- PERSONALIZED WELCOME
 //----------------------------------------------------------
-app.all('/api/ai-voice-convo', (req, res) => {
+app.all('/api/ai-voice-convo', async (req, res) => {
   try {
     function xmlEscape(str) {
       return String(str)
@@ -115,17 +113,29 @@ app.all('/api/ai-voice-convo', (req, res) => {
         .replace(/>/g, '&gt;');
     }
 
-    const { phone, firstName, program } = req.query;
+    const { phone } = req.query;
     const userId = phone || 'anonymous';
-    const safeFirstName = (firstName || "there").replace(/[^a-zA-Z\- ]/g, "");
-    const safeProgram = (program || "our programs").replace(/[^a-zA-Z\- ]/g, "");
 
-    const wsUrl = `wss://carelon-demo.onrender.com/conversation-relay?userId=${encodeURIComponent(userId)}&firstName=${encodeURIComponent(safeFirstName)}&program=${encodeURIComponent(safeProgram)}`;
+    let profileTraits = {};
+    try {
+      if (userId && userId.startsWith('+')) {
+        profileTraits = await getSegmentProfileByPhone(userId);
+      }
+    } catch (e) {
+      console.error('Failed to fetch Segment traits for welcome prompt:', e?.response?.data || e?.message);
+    }
+    const firstName = profileTraits.first_name || profileTraits.name || "there";
+    const activeProgram = profileTraits.program || "one of our health programs";
+    const additionalProgram = profileTraits.additional_program || "";
+
+    // PERSONALIZED WELCOME PROMPT!
     const welcomePrompt =
-      `Hello, ${safeFirstName}! Welcome to the ${safeProgram} program. Would you like a quick overview? ` +
-      `We also offer Wellness Coaching, Smoking Cessation, and Diabetes Prevention programs. ` +
-      `Would you like to hear a summary of these, or enroll in a different program today?`;
+      `Hello, ${firstName}! Welcome to the ${activeProgram}` +
+      `${(additionalProgram && additionalProgram !== activeProgram) ? " and " + additionalProgram : ""} program${(additionalProgram && additionalProgram !== activeProgram) ? "s" : ""} at Carelon Health. ` +
+      `I'm here to provide tailored assistance and next steps. ` +
+      `Would you like an overview of your program, hear about Wellness Coaching, Smoking Cessation, or Diabetes Prevention, or enroll in a new program?`;
 
+    const wsUrl = `wss://carelon-demo.onrender.com/conversation-relay?userId=${encodeURIComponent(userId)}`;
     const twiml =
       `<Response>
          <Connect>
