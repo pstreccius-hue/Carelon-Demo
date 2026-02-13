@@ -15,6 +15,19 @@ app.use(cors({ origin: '*' }));
 app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Add this function to fetch Segment profile by phone
+async function getSegmentProfileByPhone(phone) {
+  const SEGMENT_SPACE_ID = process.env.SEGMENT_SPACE_ID;
+  const SEGMENT_PROFILE_TOKEN = process.env.SEGMENT_PROFILE_TOKEN;
+  const url = `https://profiles.segment.com/v1/spaces/${SEGMENT_SPACE_ID}/collections/users/profiles/phone:${encodeURIComponent(phone)}/traits?limit=200`;
+  const response = await axios.get(url, {
+    headers: {
+      Authorization: `Basic ${Buffer.from(SEGMENT_PROFILE_TOKEN + ':').toString('base64')}`
+    }
+  });
+  return response.data.traits || {};
+}
+
 //---- Conversation Intelligence Webhook with Memory API Phone Lookup ----//
 app.post('/webhook/conversational-intelligence', async (req, res) => {
   try {
@@ -24,15 +37,12 @@ app.post('/webhook/conversational-intelligence', async (req, res) => {
     for (const op of operatorResults) {
       if (op.result && op.result.summary) {
         const summary = op.result.summary;
-        // Extract profileId from CUSTOMER participant
         const customerParticipant = (op.executionDetails?.participants || []).find(
           p => p.type === 'CUSTOMER'
         );
         const profileId = customerParticipant && customerParticipant.profileId;
-        // Extract memoryStoreId safely from context
         const memStoreId = op.executionDetails?.context?.customerMemory?.memoryStoreId || "YOUR_MEM_STORE_ID";
         if (profileId && memStoreId) {
-          // Fetch profile from Twilio Memory API
           try {
             const twilioAuth = {
               username: process.env.TWILIO_SID,
@@ -41,12 +51,11 @@ app.post('/webhook/conversational-intelligence', async (req, res) => {
             const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
             const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
             const traits = profileResp.data.traits || {};
-const phone =
-  traits.phone ||
-  traits.phone_number ||
-  (traits.Contact && (traits.Contact.phone || traits.Contact.phone_number));
+            const phone =
+              traits.phone ||
+              traits.phone_number ||
+              (traits.Contact && (traits.Contact.phone || traits.Contact.phone_number));
             if (phone) {
-              // Send event to Segment with phone as userId
               await sendTrack({
                 userId: phone,
                 event: 'AI Gen Call Summary - Twilio Memora',
@@ -80,10 +89,10 @@ app.post('/api/signup', async (req, res) => {
   try {
     await sendIdentify(user);
     await sendTrack({
-  userId: user.email || user.phone || user.name || 'anonymous-voice',
-  event: "Program Enrolled",
-  properties: { program: user.program }
-});
+      userId: user.email || user.phone || user.name || 'anonymous-voice',
+      event: "Program Enrolled",
+      properties: { program: user.program }
+    });
     await sendSms(user.phone, `Hi ${user.name}, welcome to the ${user.program}!`);
     await sendVoice(user.phone, user.name, user.program);
     res.json({ success: true, message: "Events sent and comms triggered." });
@@ -140,7 +149,6 @@ app.all('/api/ai-voice-convo', (req, res) => {
   }
 });
 
-
 //----------------------------------------------------------
 // HEALTHCHECK
 //----------------------------------------------------------
@@ -158,30 +166,37 @@ wss.on('connection', (ws, req) => {
   ws.on('message', async (message) => {
     try {
       const data = JSON.parse(message);
-      // Grab query params from initial websocket URL for context
       const parsedUrl = req.url ? new URL('http://x' + req.url) : null;
       const userId = parsedUrl ? parsedUrl.searchParams.get('userId') || 'anonymous' : 'anonymous';
-      const firstName = parsedUrl ? parsedUrl.searchParams.get('firstName') || 'there' : 'there';
-      const program = parsedUrl ? parsedUrl.searchParams.get('program') || 'our programs' : 'our programs';
+
+      // PERSONALIZATION: Fetch profile traits from Segment
+      let profileTraits = {};
+      try {
+        if (userId && userId.startsWith('+')) {
+          profileTraits = await getSegmentProfileByPhone(userId);
+        }
+      } catch (e) {
+        console.error('Failed to fetch Segment traits for personalization:', e?.response?.data || e?.message);
+      }
+      const firstName = profileTraits.first_name || profileTraits.name || "there";
+      const activeProgram = profileTraits.program || "one of our health programs";
+      const additionalProgram = profileTraits.additional_program || "one of our health programs";
 
       switch (data.type) {
         case "setup":
-          // Optional: session state can be initialized here
-          console.log("Setup event received:", data);
           break;
         case "prompt":
-          // Twilio sends voice transcription as `data.voicePrompt`
           const userText = data.voicePrompt || '';
-          console.log('User said:', userText);
 
           const systemPrompt = `You are Carelon Health's automated agent on a phone call.
+- Greet the user by first name (${firstName}).
+- Mention their active program (${activeProgram}) and any (${additionalProgram}) , and offer tailored assistance or next steps.
 - If the user requests an overview of a program, provide a friendly, high-level (never clinical or with PII) overview, but only give the same program's overview once per call (do not repeat overviews already provided in the conversation history).
-- The main program is "${program}". Other available programs are: Wellness Coaching, Smoking Cessation, Diabetes Prevention.
+- The main program is "${activeProgram}". Other available programs are: Wellness Coaching, Smoking Cessation, Diabetes Prevention.
 - If the user asks to enroll in another program, confirm their enrollment, thank them, and then ask if they have any more questions or want to enroll in any other programs.
 - At all times, never provide medical advice.
 - If user says they are done or do not have more questions, wish them well and say goodbye.
-
-Always reply in a positive, conversational, and concise tone. When confirming enrollment, use the format "ENROLL: <Program Name>" in addition to your reply. Remember not to repeat overviews you already provided.`;
+Always reply in a positive, conversational, and concise tone. When confirming enrollment, use the format "ENROLL: <Program Name>" in addition to your reply.`;
 
           const messages = [
             { role: "system", content: systemPrompt },
