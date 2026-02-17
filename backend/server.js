@@ -115,8 +115,9 @@ app.all('/api/ai-voice-convo', async (req, res) => {
         .replace(/>/g, '&gt;');
     }
 
-    const { phone, memStoreId: queryMemStoreId, profileId: queryProfileId } = req.query;
-    const userId = phone || 'anonymous';
+    // Use explicit naming to avoid let phone re-declaration conflict
+    const { phone: queryPhone, memStoreId: queryMemStoreId, profileId: queryProfileId } = req.query;
+    const userId = queryPhone || 'anonymous';
 
     // 1. Get Segment profile
     let profileTraits = {};
@@ -128,9 +129,9 @@ app.all('/api/ai-voice-convo', async (req, res) => {
       console.error('Failed to fetch Segment traits for welcome prompt:', e?.response?.data || e?.message);
     }
 
-    // 2. Get Twilio Memory traits with no duplicate 'let phone'
+    // 2. Get Twilio Memory traits (and only DECLARE ONCE!)
     let twilioTraits = {};
-    let phone = null;
+    let memPhone = null;
     let favoriteExercise = null;
     try {
       const memStoreId = queryMemStoreId || process.env.DEFAULT_TWILIO_MEM_STORE_ID || "YOUR_MEM_STORE_ID";
@@ -146,11 +147,12 @@ app.all('/api/ai-voice-convo', async (req, res) => {
         const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
         twilioTraits = profileResp.data.traits || {};
 
-        // Use phone and favoriteExercise ONLY from traits.Contact
-        phone = (twilioTraits.Contact && twilioTraits.Contact.phone) ? twilioTraits.Contact.phone : null;
-        favoriteExercise = (twilioTraits.Contact && typeof twilioTraits.Contact.favoriteExercise === "string" && twilioTraits.Contact.favoriteExercise.trim() !== "")
-          ? twilioTraits.Contact.favoriteExercise
-          : null;
+        // Only extract from traits.Contact
+        memPhone = (twilioTraits.Contact && twilioTraits.Contact.phone) ? twilioTraits.Contact.phone : null;
+        favoriteExercise =
+          (twilioTraits.Contact && typeof twilioTraits.Contact.favoriteExercise === "string" && twilioTraits.Contact.favoriteExercise.trim() !== "")
+            ? twilioTraits.Contact.favoriteExercise
+            : null;
       }
     } catch (e) {
       console.error('Failed fetch Twilio Memory traits for welcome prompt:', e?.response?.data || e?.message);
@@ -199,7 +201,7 @@ app.all('/api/ai-voice-convo', async (req, res) => {
     console.error('ai-voice-convo error:', err);
     res.status(500).send('Internal error');
   }
-
+});
 
 //----------------------------------------------------------
 // HEALTHCHECK
