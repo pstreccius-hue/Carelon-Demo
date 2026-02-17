@@ -114,17 +114,19 @@ app.all('/api/ai-voice-convo', async (req, res) => {
         .replace(/>/g, '&gt;');
     }
 
+    // Extract ONLY from query parameters
     const { phone: queryPhone, memStoreId: queryMemStoreId, profileId: queryProfileId } = req.query;
     const userId = queryPhone || 'anonymous';
 
-    // Lookup Memory IDs using the phone if not explicitly provided
-    console.log('ai-voice-convo -- userId: ', userId);
-console.log('ai-voice-convo -- phoneToMemoryProfile:', JSON.stringify(phoneToMemoryProfile, null, 2));
-    const memProfileInfo = phoneToMemoryProfile[userId] || {};
-    const memStoreId = queryMemStoreId || memProfileInfo.memStoreId || process.env.DEFAULT_TWILIO_MEM_STORE_ID || "YOUR_MEM_STORE_ID";
-    const profileId = queryProfileId || memProfileInfo.profileId || null;
+    // Use query param directly or a default as absolute fallback
+    const memStoreId = queryMemStoreId || process.env.DEFAULT_TWILIO_MEM_STORE_ID || "YOUR_MEM_STORE_ID";
+    const profileId = (queryProfileId && queryProfileId !== 'undefined') ? queryProfileId : null;
 
-    // 1. Get Segment profile
+    console.log('ai-voice-convo -- userId:', userId);
+    console.log('ai-voice-convo -- memStoreId:', memStoreId);
+    console.log('ai-voice-convo -- profileId:', profileId);
+
+    // 1. Get Segment profile traits for other personalization
     let profileTraits = {};
     try {
       if (userId && userId.startsWith('+')) {
@@ -134,71 +136,71 @@ console.log('ai-voice-convo -- phoneToMemoryProfile:', JSON.stringify(phoneToMem
       console.error('Failed to fetch Segment traits for welcome prompt:', e?.response?.data || e?.message);
     }
 
-    // 2. Get Twilio Memory traits with no duplicate 'let phone'
+    // 2. Get Twilio Memory traits and favoriteExercise directly
     let twilioTraits = {};
-let phone = null;
-let favoriteExercise = null;
-try {
-  if (profileId && memStoreId) {
-    const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
-    const twilioAuth = {
-      username: process.env.TWILIO_SID,
-      password: process.env.TWILIO_TOKEN
-    };
-    const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
-    twilioTraits = profileResp.data.traits || {};
+    let phone = null;
+    let favoriteExercise = null;
+    try {
+      if (profileId && memStoreId) {
+        const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
+        const twilioAuth = {
+          username: process.env.TWILIO_SID,
+          password: process.env.TWILIO_TOKEN
+        };
+        const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
+        twilioTraits = profileResp.data.traits || {};
 
-    console.log("Twilio Memory API raw traits:", JSON.stringify(twilioTraits, null, 2)); // <-- LOG!
+        console.log("Twilio Memory API raw traits:", JSON.stringify(twilioTraits, null, 2));
 
-    phone = (twilioTraits.Contact && twilioTraits.Contact.phone) ? twilioTraits.Contact.phone : null;
-    favoriteExercise = (twilioTraits.Contact && typeof twilioTraits.Contact.favoriteExercise === "string" && twilioTraits.Contact.favoriteExercise.trim() !== "")
-      ? twilioTraits.Contact.favoriteExercise
-      : null;
-  } else {
-    console.warn("Missing profileId or memStoreId in ai-voice-convo:", { profileId, memStoreId });
-  }
-} catch (e) {
-  console.error('Failed fetch Twilio Memory traits for welcome prompt:', e?.response?.data || e?.message);
-  favoriteExercise = null;
-}
+        phone = (twilioTraits.Contact && twilioTraits.Contact.phone) ? twilioTraits.Contact.phone : null;
+        favoriteExercise = (twilioTraits.Contact && typeof twilioTraits.Contact.favoriteExercise === "string" && twilioTraits.Contact.favoriteExercise.trim() !== "")
+          ? twilioTraits.Contact.favoriteExercise
+          : null;
+      } else {
+        console.warn("Missing profileId or memStoreId in ai-voice-convo:", { profileId, memStoreId });
+      }
+    } catch (e) {
+      console.error('Failed fetch Twilio Memory traits for welcome prompt:', e?.response?.data || e?.message);
+      favoriteExercise = null;
+    }
 
-if (!favoriteExercise) {
-  favoriteExercise = "exercise";
-}
+    if (!favoriteExercise) {
+      favoriteExercise = "exercise";
+    }
 
-const firstName = profileTraits.first_name || profileTraits.name || "there";
-const activeProgram = profileTraits.program || "one of our health programs";
-const additionalProgram = profileTraits.additional_program || "";
+    const firstName = profileTraits.first_name || profileTraits.name || "there";
+    const activeProgram = profileTraits.program || "one of our health programs";
+    const additionalProgram = profileTraits.additional_program || "";
 
-const welcomePrompt =
-  `Hello, ${firstName}! Welcome to the ${activeProgram}` +
-  `${(additionalProgram && additionalProgram !== activeProgram) ? " and " + additionalProgram : ""} program${(additionalProgram && additionalProgram !== activeProgram) ? "s" : ""} at Carelon Health. ` +
-  `I see your favorite exercise is ${favoriteExercise}. ` +
-  `I'm here to provide tailored assistance and next steps. ` +
-  `Would you like an overview of your program, hear about Wellness Coaching, Smoking Cessation, or Diabetes Prevention, or enroll in a new program?`;
+    const welcomePrompt =
+      `Hello, ${firstName}! Welcome to the ${activeProgram}` +
+      `${(additionalProgram && additionalProgram !== activeProgram) ? " and " + additionalProgram : ""} program${(additionalProgram && additionalProgram !== activeProgram) ? "s" : ""} at Carelon Health. ` +
+      `I see your favorite exercise is ${favoriteExercise}. ` +
+      `I'm here to provide tailored assistance and next steps. ` +
+      `Would you like an overview of your program, hear about Wellness Coaching, Smoking Cessation, or Diabetes Prevention, or enroll in a new program?`;
 
-const wsUrl =
-  `wss://carelon-demo.onrender.com/conversation-relay?userId=${encodeURIComponent(userId)}`
-    + (memStoreId ? `&memStoreId=${encodeURIComponent(memStoreId)}` : '')
-    + (profileId ? `&profileId=${encodeURIComponent(profileId)}` : '');
+    const wsUrl =
+      `wss://carelon-demo.onrender.com/conversation-relay?userId=${encodeURIComponent(userId)}`
+        + (memStoreId ? `&memStoreId=${encodeURIComponent(memStoreId)}` : '')
+        + (profileId ? `&profileId=${encodeURIComponent(profileId)}` : '');
 
-const twiml =
-  `<Response>
-     <Connect>
-       <ConversationRelay
-         url="${xmlEscape(wsUrl)}"
-         transcriptionEnabled="true"
-         clientParticipantIdentity="${xmlEscape("user_" + userId)}"
-         clientDisplayName="Participant"
-         botParticipantIdentity="carelon_ai_agent"
-         botDisplayName="Carelon AI Assistant"
-         welcomeGreeting="${xmlEscape(welcomePrompt)}"
-       />
-     </Connect>
-   </Response>`;
+    const twiml =
+      `<Response>
+         <Connect>
+           <ConversationRelay
+             url="${xmlEscape(wsUrl)}"
+             transcriptionEnabled="true"
+             clientParticipantIdentity="${xmlEscape("user_" + userId)}"
+             clientDisplayName="Participant"
+             botParticipantIdentity="carelon_ai_agent"
+             botDisplayName="Carelon AI Assistant"
+             welcomeGreeting="${xmlEscape(welcomePrompt)}"
+           />
+         </Connect>
+       </Response>`;
 
-res.type('text/xml');
-res.send(twiml);
+    res.type('text/xml');
+    res.send(twiml);
   } catch (err) {
     console.error('ai-voice-convo error:', err);
     res.status(500).send('Internal error');
