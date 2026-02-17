@@ -118,6 +118,8 @@ app.all('/api/ai-voice-convo', async (req, res) => {
     const userId = queryPhone || 'anonymous';
 
     // Lookup Memory IDs using the phone if not explicitly provided
+    console.log('ai-voice-convo -- userId: ', userId);
+console.log('ai-voice-convo -- phoneToMemoryProfile:', JSON.stringify(phoneToMemoryProfile, null, 2));
     const memProfileInfo = phoneToMemoryProfile[userId] || {};
     const memStoreId = queryMemStoreId || memProfileInfo.memStoreId || process.env.DEFAULT_TWILIO_MEM_STORE_ID || "YOUR_MEM_STORE_ID";
     const profileId = queryProfileId || memProfileInfo.profileId || null;
@@ -134,64 +136,69 @@ app.all('/api/ai-voice-convo', async (req, res) => {
 
     // 2. Get Twilio Memory traits with no duplicate 'let phone'
     let twilioTraits = {};
-    let phone = null;
-    let favoriteExercise = null;
-    try {
-      if (profileId && memStoreId) {
-        const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
-        const twilioAuth = {
-          username: process.env.TWILIO_SID,
-          password: process.env.TWILIO_TOKEN
-        };
-        const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
-        twilioTraits = profileResp.data.traits || {};
-        phone = (twilioTraits.Contact && twilioTraits.Contact.phone) ? twilioTraits.Contact.phone : null;
-        favoriteExercise = (twilioTraits.Contact && typeof twilioTraits.Contact.favoriteExercise === "string" && twilioTraits.Contact.favoriteExercise.trim() !== "")
-          ? twilioTraits.Contact.favoriteExercise
-          : null;
-      }
-    } catch (e) {
-      console.error('Failed fetch Twilio Memory traits for welcome prompt:', e?.response?.data || e?.message);
-      favoriteExercise = null;
-    }
+let phone = null;
+let favoriteExercise = null;
+try {
+  if (profileId && memStoreId) {
+    const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
+    const twilioAuth = {
+      username: process.env.TWILIO_SID,
+      password: process.env.TWILIO_TOKEN
+    };
+    const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
+    twilioTraits = profileResp.data.traits || {};
 
-    if (!favoriteExercise) {
-      favoriteExercise = "exercise";
-    }
+    console.log("Twilio Memory API raw traits:", JSON.stringify(twilioTraits, null, 2)); // <-- LOG!
 
-    const firstName = profileTraits.first_name || profileTraits.name || "there";
-    const activeProgram = profileTraits.program || "one of our health programs";
-    const additionalProgram = profileTraits.additional_program || "";
+    phone = (twilioTraits.Contact && twilioTraits.Contact.phone) ? twilioTraits.Contact.phone : null;
+    favoriteExercise = (twilioTraits.Contact && typeof twilioTraits.Contact.favoriteExercise === "string" && twilioTraits.Contact.favoriteExercise.trim() !== "")
+      ? twilioTraits.Contact.favoriteExercise
+      : null;
+  } else {
+    console.warn("Missing profileId or memStoreId in ai-voice-convo:", { profileId, memStoreId });
+  }
+} catch (e) {
+  console.error('Failed fetch Twilio Memory traits for welcome prompt:', e?.response?.data || e?.message);
+  favoriteExercise = null;
+}
 
-    const welcomePrompt =
-      `Hello, ${firstName}! Welcome to the ${activeProgram}` +
-      `${(additionalProgram && additionalProgram !== activeProgram) ? " and " + additionalProgram : ""} program${(additionalProgram && additionalProgram !== activeProgram) ? "s" : ""} at Carelon Health. ` +
-      `I see your favorite exercise is ${favoriteExercise}. ` +
-      `I'm here to provide tailored assistance and next steps. ` +
-      `Would you like an overview of your program, hear about Wellness Coaching, Smoking Cessation, or Diabetes Prevention, or enroll in a new program?`;
+if (!favoriteExercise) {
+  favoriteExercise = "exercise";
+}
 
-    const wsUrl =
-      `wss://carelon-demo.onrender.com/conversation-relay?userId=${encodeURIComponent(userId)}`
-        + (memStoreId ? `&memStoreId=${encodeURIComponent(memStoreId)}` : '')
-        + (profileId ? `&profileId=${encodeURIComponent(profileId)}` : '');
+const firstName = profileTraits.first_name || profileTraits.name || "there";
+const activeProgram = profileTraits.program || "one of our health programs";
+const additionalProgram = profileTraits.additional_program || "";
 
-    const twiml =
-      `<Response>
-         <Connect>
-           <ConversationRelay
-             url="${xmlEscape(wsUrl)}"
-             transcriptionEnabled="true"
-             clientParticipantIdentity="${xmlEscape("user_" + userId)}"
-             clientDisplayName="Participant"
-             botParticipantIdentity="carelon_ai_agent"
-             botDisplayName="Carelon AI Assistant"
-             welcomeGreeting="${xmlEscape(welcomePrompt)}"
-           />
-         </Connect>
-       </Response>`;
+const welcomePrompt =
+  `Hello, ${firstName}! Welcome to the ${activeProgram}` +
+  `${(additionalProgram && additionalProgram !== activeProgram) ? " and " + additionalProgram : ""} program${(additionalProgram && additionalProgram !== activeProgram) ? "s" : ""} at Carelon Health. ` +
+  `I see your favorite exercise is ${favoriteExercise}. ` +
+  `I'm here to provide tailored assistance and next steps. ` +
+  `Would you like an overview of your program, hear about Wellness Coaching, Smoking Cessation, or Diabetes Prevention, or enroll in a new program?`;
 
-    res.type('text/xml');
-    res.send(twiml);
+const wsUrl =
+  `wss://carelon-demo.onrender.com/conversation-relay?userId=${encodeURIComponent(userId)}`
+    + (memStoreId ? `&memStoreId=${encodeURIComponent(memStoreId)}` : '')
+    + (profileId ? `&profileId=${encodeURIComponent(profileId)}` : '');
+
+const twiml =
+  `<Response>
+     <Connect>
+       <ConversationRelay
+         url="${xmlEscape(wsUrl)}"
+         transcriptionEnabled="true"
+         clientParticipantIdentity="${xmlEscape("user_" + userId)}"
+         clientDisplayName="Participant"
+         botParticipantIdentity="carelon_ai_agent"
+         botDisplayName="Carelon AI Assistant"
+         welcomeGreeting="${xmlEscape(welcomePrompt)}"
+       />
+     </Connect>
+   </Response>`;
+
+res.type('text/xml');
+res.send(twiml);
   } catch (err) {
     console.error('ai-voice-convo error:', err);
     res.status(500).send('Internal error');
