@@ -9,6 +9,7 @@ const { sendSms, sendVoice } = require('./twilio');
 const WebSocket = require('ws');
 const axios = require('axios');
 require('dotenv').config();
+const phoneToMemoryProfile = {};
 
 const app = express();
 app.use(cors({ origin: '*' }));
