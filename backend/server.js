@@ -100,6 +100,8 @@ app.post('/webhook/conversational-intelligence', async (req, res) => {
 app.post('/api/signup', async (req, res) => {
   const user = req.body;
   try {
+    // Assume you look up/create user.memStoreId and user.profileId here
+    // (from your own db, Memory API, etc)
     await sendIdentify(user);
     await sendTrack({
       userId: user.email || user.phone || user.name || 'anonymous-voice',
@@ -107,7 +109,13 @@ app.post('/api/signup', async (req, res) => {
       properties: { program: user.program }
     });
     await sendSms(user.phone, `Hi ${user.name}, welcome to the ${user.program}!`);
-
+    await sendVoice(
+      user.phone,
+      user.name,
+      user.program,
+      user.memStoreId,   // Should be the real Memory Store ID for *this user/conversation*
+      user.profileId     // Should be the real Memory Profile ID for this user
+    );
     res.json({ success: true, message: "Events sent and comms triggered." });
   } catch (err) {
     res.status(500).json({ error: err.toString() });
