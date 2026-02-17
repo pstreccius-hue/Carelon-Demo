@@ -137,32 +137,32 @@ app.all('/api/ai-voice-convo', async (req, res) => {
 
     // 2. Get Twilio Memory traits (using memStoreId/profileId, if available)
     let twilioTraits = {};
-    let favoriteExercise = null;
-    try {
-      // Prefer profileId/memStoreId from query if provided, else fallback
-      const memStoreId = queryMemStoreId || process.env.DEFAULT_TWILIO_MEM_STORE_ID || "YOUR_MEM_STORE_ID";
-      const profileId = queryProfileId && queryProfileId !== 'undefined'
-        ? queryProfileId
-        : null;
-      if (profileId && memStoreId) {
-        const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
-        const twilioAuth = {
-          username: process.env.TWILIO_SID,
-          password: process.env.TWILIO_TOKEN
-        };
-        const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
-        twilioTraits = profileResp.data.traits || {};
-        favoriteExercise =
-            (twilioTraits.Contact && twilioTraits.Contact.favoriteExercise) ||
-            twilioTraits.favoriteExercise ||
-            twilioTraits.favorite_exercise ||
-            (twilioTraits.Contact && twilioTraits.Contact.favorite_exercise) ||
-            null;
-      }
-    } catch (e) {
-      console.error('Failed fetch Twilio Memory traits for welcome prompt:', e?.response?.data || e?.message);
-    }
+let favoriteExercise = null;
+try {
+  const memStoreId = queryMemStoreId || process.env.DEFAULT_TWILIO_MEM_STORE_ID || "YOUR_MEM_STORE_ID";
+  const profileId = queryProfileId && queryProfileId !== 'undefined'
+    ? queryProfileId
+    : null;
+  if (profileId && memStoreId) {
+    const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
+    const twilioAuth = {
+      username: process.env.TWILIO_SID,
+      password: process.env.TWILIO_TOKEN
+    };
+    const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
+    twilioTraits = profileResp.data.traits || {};
 
+    // 💡 Only use this precise key structure for your trait extraction:
+    if (twilioTraits.Contact && typeof twilioTraits.Contact.favoriteExercise === 'string' && twilioTraits.Contact.favoriteExercise.trim() !== '') {
+      favoriteExercise = twilioTraits.Contact.favoriteExercise;
+    } else {
+      favoriteExercise = "exercise";
+    }
+  }
+} catch (e) {
+  console.error('Failed fetch Twilio Memory traits for welcome prompt:', e?.response?.data || e?.message);
+  favoriteExercise = "exercise";
+}
     // 3. Fallback: use favoriteExercise from Segment or fallback string if not set above
     if (!favoriteExercise) {
       favoriteExercise =
