@@ -117,7 +117,7 @@ app.post('/api/signup', async (req, res) => {
     } catch (err) {
       console.error('Error using Memory Profiles/Lookup:', err?.response?.data || err?.message);
     }
-
+console.log('ProfileId to sendVoice:', profileId, 'MemStoreId:', memStoreId);
     await sendVoice(
       user.phone,
       user.name,
