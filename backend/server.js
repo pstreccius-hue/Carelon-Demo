@@ -54,7 +54,7 @@ app.post('/webhook/conversational-intelligence', async (req, res) => {
               traits.phone ||
               traits.phone_number ||
               (traits.Contact && (traits.Contact.phone || traits.Contact.phone_number));
-            const favoriteExercise = traits.favoriteExercise || traits.favorite_exercise || "exercise";
+            const favoriteExercise = traits.favoriteExercise || traits.favorite_exercise || (traits.Contact && (traits.Contact.favoriteExercise || traits.Contact.favorite_exercise)) || "exercise";
             if (phone) {
               await sendTrack({
                 userId: phone,
@@ -120,11 +120,6 @@ app.all('/api/ai-voice-convo', async (req, res) => {
 
     const { phone } = req.query;
     const userId = phone || 'anonymous';
-    const favoriteExercise =
-  profileTraits.favoriteExercise ||
-  profileTraits.favorite_exercise ||
-  (profileTraits.Contact && (profileTraits.Contact.favoriteExercise || profileTraits.Contact.favorite_exercise)) ||
-  "exercise";
 
     let profileTraits = {};
     try {
@@ -137,12 +132,17 @@ app.all('/api/ai-voice-convo', async (req, res) => {
     const firstName = profileTraits.first_name || profileTraits.name || "there";
     const activeProgram = profileTraits.program || "one of our health programs";
     const additionalProgram = profileTraits.additional_program || "";
+    const favoriteExercise =
+      profileTraits.favoriteExercise ||
+      profileTraits.favorite_exercise ||
+      (profileTraits.Contact && (profileTraits.Contact.favoriteExercise || profileTraits.Contact.favorite_exercise)) ||
+      "exercise";
 
     // PERSONALIZED WELCOME PROMPT!
     const welcomePrompt =
       `Hello, ${firstName}! Welcome to the ${activeProgram}` +
       `${(additionalProgram && additionalProgram !== activeProgram) ? " and " + additionalProgram : ""} program${(additionalProgram && additionalProgram !== activeProgram) ? "s" : ""} at Carelon Health. ` +
-      `I see your favorite exercise is ${favoriteExercise}. ` *
+      `I see your favorite exercise is ${favoriteExercise}. ` +
       `I'm here to provide tailored assistance and next steps. ` +
       `Would you like an overview of your program, hear about Wellness Coaching, Smoking Cessation, or Diabetes Prevention, or enroll in a new program?`;
 
@@ -175,9 +175,6 @@ app.all('/api/ai-voice-convo', async (req, res) => {
 //----------------------------------------------------------
 app.get('/health', (req, res) => res.send('OK'));
 
-//----------------------------------------------------------
-// WebSocket Server for Conversation Relay - UPDATED PROTOCOL
-//----------------------------------------------------------
 const server = http.createServer(app);
 server.listen(process.env.PORT || 3001, () => console.log('Backend running on 3001'));
 
@@ -203,12 +200,12 @@ wss.on('connection', (ws, req) => {
       const activeProgram = profileTraits.program || "one of our health programs";
       const additionalProgram = profileTraits.additional_program || "one of our health programs";
       const favoriteExercise =
-  profileTraits.favoriteExercise ||
-  profileTraits.favorite_exercise ||
-  (profileTraits.Contact && (profileTraits.Contact.favoriteExercise || profileTraits.Contact.favorite_exercise)) ||
-  "exercise";
+        profileTraits.favoriteExercise ||
+        profileTraits.favorite_exercise ||
+        (profileTraits.Contact && (profileTraits.Contact.favoriteExercise || profileTraits.Contact.favorite_exercise)) ||
+        "exercise";
 
-      switch (data.type) {
+            switch (data.type) {
         case "setup":
           break;
         case "prompt":
@@ -216,7 +213,7 @@ wss.on('connection', (ws, req) => {
 
           const systemPrompt = `You are Carelon Health's automated agent on a phone call.
 - Greet the user by first name (${firstName}).
-- Mention their active program (${activeProgram}) and any (${additionalProgram}) and that their favorite exercise is ${favoriteExercise}. Then offer tailored assistance or next steps.
+- Mention their active program (${activeProgram}) and any (${additionalProgram}), and that their favorite exercise is ${favoriteExercise}. Then offer tailored assistance or next steps.
 - If the user requests an overview of a program, provide a friendly, high-level (never clinical or with PII) overview, but only give the same program's overview once per call (do not repeat overviews already provided in the conversation history).
 - The main program is "${activeProgram}". Other available programs are: Wellness Coaching, Smoking Cessation, Diabetes Prevention.
 - If the user asks to enroll in another program, confirm their enrollment, thank them, and then ask if they have any more questions or want to enroll in any other programs.
@@ -240,10 +237,9 @@ Always reply in a positive, conversational, and concise tone. When confirming en
           const reply = aiRes.choices[0].message.content;
           console.log('AI REPLY:', reply);
 
-          // SEND IN THE EXPECTED FORMAT
           ws.send(JSON.stringify({
-            type: "text",        // correct for ConversationRelay
-            token: reply,        // agent reply text
+            type: "text",
+            token: reply,
             last: true
           }));
 
@@ -251,16 +247,15 @@ Always reply in a positive, conversational, and concise tone. When confirming en
           const signupMatch = reply.match(/ENROLL: ([A-Za-z ]+)/i);
           if (signupMatch) {
             const newProgram = signupMatch[1].trim();
-            // Track the enrollment analytics event
-            await sendTrack(
-              { phone: userId },
-              'Additional Program Enrolled',
-              { program: newProgram }
-            );
-            // Update user trait (latest enrollment)
-            await sendIdentify(
-              { phone: userId, last_enrolled_program: newProgram }
-            );
+            await sendTrack({
+              userId: userId,
+              event: 'Additional Program Enrolled',
+              properties: { program: newProgram }
+            });
+            await sendIdentify({
+              userId: userId,
+              traits: { last_enrolled_program: newProgram }
+            });
           }
           break;
         case "interrupt":
@@ -278,4 +273,5 @@ Always reply in a positive, conversational, and concise tone. When confirming en
   ws.on('close', () => {
     console.log('ConversationRelay WebSocket disconnected');
   });
+});
 });
