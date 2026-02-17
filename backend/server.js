@@ -146,6 +146,7 @@ app.all('/api/ai-voice-convo', async (req, res) => {
         };
         const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
         twilioTraits = profileResp.data.traits || {};
+        console.log('Twilio Memory traits:', JSON.stringify(twilioTraits, null, 2));
 
         // Only extract from traits.Contact
         memPhone = (twilioTraits.Contact && twilioTraits.Contact.phone) ? twilioTraits.Contact.phone : null;
