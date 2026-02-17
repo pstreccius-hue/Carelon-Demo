@@ -28,6 +28,27 @@ async function getSegmentProfileByPhone(phone) {
   return response.data.traits || {};
 }
 
+async function getTwilioMemoryProfileByPhone(phone) {
+  const memStoreId = process.env.DEFAULT_TWILIO_MEM_STORE_ID;
+  const twilioAuth = {
+    username: process.env.TWILIO_SID,
+    password: process.env.TWILIO_TOKEN
+  };
+  try {
+    const memoryApiUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles?Contact.phone=${encodeURIComponent(phone)}`;
+    const resp = await axios.get(memoryApiUrl, { auth: twilioAuth });
+    if (resp.data.profiles && resp.data.profiles.length > 0) {
+      // Log and return traits for debugging
+      console.log("Found Twilio Memory profile traits:", JSON.stringify(resp.data.profiles[0].traits, null, 2));
+      return resp.data.profiles[0].traits || {};
+    }
+    return {};
+  } catch (err) {
+    console.error("Error fetching Twilio Memory profile by phone:", err?.response?.data || err?.message);
+    return {};
+  }
+}
+
 //---- Conversation Intelligence Webhook with Memory API Phone Lookup ----//
 app.post('/webhook/conversational-intelligence', async (req, res) => {
   try {
@@ -127,62 +148,33 @@ app.all('/api/ai-voice-convo', async (req, res) => {
 
     // Extract ONLY from query parameters
     const { phone: queryPhone, memStoreId: queryMemStoreId, profileId: queryProfileId } = req.query;
-    const userId = queryPhone || 'anonymous';
+    const userId = phone || 'anonymous';
 
-    // Use query param directly or a default as absolute fallback
-    const memStoreId = queryMemStoreId || process.env.DEFAULT_TWILIO_MEM_STORE_ID || "YOUR_MEM_STORE_ID";
-    const profileId = (queryProfileId && queryProfileId !== 'undefined') ? queryProfileId : null;
+// Get Segment traits
+let profileTraits = {};
+try {
+  if (userId && userId.startsWith('+')) {
+    profileTraits = await getSegmentProfileByPhone(userId);
+  }
+} catch (e) { ... }
 
-    console.log('ai-voice-convo -- userId:', userId);
-    console.log('ai-voice-convo -- memStoreId:', memStoreId);
-    console.log('ai-voice-convo -- profileId:', profileId);
+// Get Twilio Memory traits
+let twilioTraits = {};
+try {
+  if (userId && userId.startsWith('+')) {
+    twilioTraits = await getTwilioMemoryProfileByPhone(userId);
+  }
+} catch (e) { ... }
 
-    // 1. Get Segment profile traits for other personalization
-    let profileTraits = {};
-    try {
-      if (userId && userId.startsWith('+')) {
-        profileTraits = await getSegmentProfileByPhone(userId);
-      }
-    } catch (e) {
-      console.error('Failed to fetch Segment traits for welcome prompt:', e?.response?.data || e?.message);
-    }
+// Extract traits
+const firstName = profileTraits.first_name || profileTraits.name || "there";
+const activeProgram = profileTraits.program || "one of our health programs";
+const additionalProgram = profileTraits.additional_program || "";
 
-    // 2. Get Twilio Memory traits and favoriteExercise directly
-    let twilioTraits = {};
-    let phone = null;
-    let favoriteExercise = null;
-    try {
-      if (profileId && memStoreId) {
-        const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
-        const twilioAuth = {
-          username: process.env.TWILIO_SID,
-          password: process.env.TWILIO_TOKEN
-        };
-        const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
-        twilioTraits = profileResp.data.traits || {};
-
-        console.log("Twilio Memory API raw traits:", JSON.stringify(twilioTraits, null, 2));
-
-        phone = (twilioTraits.Contact && twilioTraits.Contact.phone) ? twilioTraits.Contact.phone : null;
-        favoriteExercise = (twilioTraits.Contact && typeof twilioTraits.Contact.favoriteExercise === "string" && twilioTraits.Contact.favoriteExercise.trim() !== "")
-          ? twilioTraits.Contact.favoriteExercise
-          : null;
-      } else {
-        console.warn("Missing profileId or memStoreId in ai-voice-convo:", { profileId, memStoreId });
-      }
-    } catch (e) {
-      console.error('Failed fetch Twilio Memory traits for welcome prompt:', e?.response?.data || e?.message);
-      favoriteExercise = null;
-    }
-
-    if (!favoriteExercise) {
-      favoriteExercise = "exercise";
-    }
-
-    const firstName = profileTraits.first_name || profileTraits.name || "there";
-    const activeProgram = profileTraits.program || "one of our health programs";
-    const additionalProgram = profileTraits.additional_program || "";
-
+const favoriteExercise = (
+  twilioTraits.Contact && twilioTraits.Contact.favoriteExercise
+) ? twilioTraits.Contact.favoriteExercise : "exercise";
+    
     const welcomePrompt =
       `Hello, ${firstName}! Welcome to the ${activeProgram}` +
       `${(additionalProgram && additionalProgram !== activeProgram) ? " and " + additionalProgram : ""} program${(additionalProgram && additionalProgram !== activeProgram) ? "s" : ""} at Carelon Health. ` +
