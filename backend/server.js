@@ -34,12 +34,13 @@ app.post('/webhook/conversational-intelligence', async (req, res) => {
     const operatorResults = req.body.operatorResults || [];
     for (const op of operatorResults) {
       if (op.result && op.result.summary) {
-        const summary = op.result.summary;
+        // ProfileId and MemStoreId extraction SAME as before!
         const customerParticipant = (op.executionDetails?.participants || []).find(
           p => p.type === 'CUSTOMER'
         );
         const profileId = customerParticipant && customerParticipant.profileId;
         const memStoreId = op.executionDetails?.context?.customerMemory?.memoryStoreId || "YOUR_MEM_STORE_ID";
+
         if (profileId && memStoreId) {
           try {
             const twilioAuth = {
@@ -51,20 +52,33 @@ app.post('/webhook/conversational-intelligence', async (req, res) => {
             const traits = profileResp.data.traits || {};
             const phone = traits.Contact && traits.Contact.phone ? traits.Contact.phone : null;
             const favoriteExercise = traits.Contact && traits.Contact.favoriteExercise ? traits.Contact.favoriteExercise : "exercise";
+
             if (phone) {
+              // Update Segment as before
+              await sendIdentify({ userId: phone, traits: { favoriteExercise } });
               await sendTrack({
                 userId: phone,
                 event: 'AI Gen Call Summary - Twilio Memora',
                 properties: {
-                  most_recent_call_summary: summary,
+                  most_recent_call_summary: op.result.summary,
                   mem_profile_id: profileId
                 }
               });
-              await sendIdentify({
-                userId: phone,
-                traits: { favoriteExercise }
-              });
               console.log(`[CI webhook] Sent Call Summary event to Segment for phone ${phone}`);
+
+              // 🚀 TRIGGER OUTBOUND VOICE CALL (real time)
+              // Use name/program from your DB/user record, or as placeholder
+              const userName = traits.name || "User"; // adapt to your real data model
+              const userProgram = traits.program || "Health Program"; // adapt if needed
+
+              await sendVoice(
+                phone,
+                userName,
+                userProgram,
+                memStoreId,
+                profileId
+              );
+              console.log(`[CI webhook] Outbound call triggered to ${phone} (memStoreId: ${memStoreId}, profileId: ${profileId})`);
             } else {
               console.warn('[CI webhook] No phone found in Twilio Memory profile.', profileResp.data);
             }
@@ -93,7 +107,7 @@ app.post('/api/signup', async (req, res) => {
       properties: { program: user.program }
     });
     await sendSms(user.phone, `Hi ${user.name}, welcome to the ${user.program}!`);
-    await sendVoice(user.phone, user.name, user.program);
+
     res.json({ success: true, message: "Events sent and comms triggered." });
   } catch (err) {
     res.status(500).json({ error: err.toString() });
