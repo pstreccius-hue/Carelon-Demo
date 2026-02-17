@@ -72,9 +72,24 @@ app.post('/api/signup', async (req, res) => {
       properties: { program: user.program }
     });
     await sendSms(user.phone, `Hi ${user.name}, welcome to the ${user.program}!`);
+// --- HERE: Use Memory Profiles/Lookup for profileId ---
+    try {
+      const lookupUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/Lookup`;
+      const twilioAuth = {
+        username: process.env.TWILIO_SID,
+        password: process.env.TWILIO_TOKEN
+      };
+      // Ensure phone is in E.164 (+15551234567)
+      const resp = await axios.post(lookupUrl, {
+        idType: "phone",
+        value: user.phone
+      }, { auth: twilioAuth });
+      profileId = resp.data.id;
+      console.log("Resolved profileId via Lookup:", profileId);
+    } catch (err) {
+      console.error("Error using Memory Profiles/Lookup:", err?.response?.data || err?.message);
+    }
 
-    // Get or create profileId for this phone, plus Memory traits
-    const { profileId } = await getTwilioMemoryProfileByPhone(user.phone);
 
     // Now trigger the call with real IDs
     await sendVoice(
