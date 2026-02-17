@@ -88,9 +88,6 @@ app.post('/webhook/conversational-intelligence', async (req, res) => {
 
 app.post('/api/signup', async (req, res) => {
   const user = req.body;
-  const memStoreId = process.env.DEFAULT_TWILIO_MEM_STORE_ID;
-  let profileId = null;
-
   try {
     await sendIdentify(user);
     await sendTrack({
@@ -100,30 +97,12 @@ app.post('/api/signup', async (req, res) => {
     });
     await sendSms(user.phone, `Hi ${user.name}, welcome to the ${user.program}!`);
 
-    // Use the Twilio Memory Store Lookup endpoint (idType: phone)
-    try {
-      const lookupUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/Lookup`;
-      const twilioAuth = {
-        username: process.env.TWILIO_SID,
-        password: process.env.TWILIO_TOKEN
-      };
-      const cleanPhone = user.phone.replace(/[^+\d]/g, ''); // Remove dashes/spaces, keep + and digits
-      const resp = await axios.post(lookupUrl, {
-        idType: "phone",
-        value: cleanPhone
-      }, { auth: twilioAuth });
-      profileId = resp.data.id;
-      console.log(`Profile ID found/created: ${profileId}`);
-    } catch (err) {
-      console.error('Error using Memory Profiles/Lookup:', err?.response?.data || err?.message);
-    }
-console.log('ProfileId to sendVoice:', profileId, 'MemStoreId:', memStoreId);
+    // Do not try to look up MemStore/profileId here; let Twilio create on first call
     await sendVoice(
       user.phone,
       user.name,
-      user.program,
-      memStoreId,
-      profileId
+      user.program
+      // no memStoreId, profileId yet
     );
 
     res.json({ success: true, message: "Events sent and comms triggered." });
