@@ -89,8 +89,6 @@ app.post('/webhook/conversational-intelligence', async (req, res) => {
 app.post('/api/signup', async (req, res) => {
   const user = req.body;
   try {
-    // Assume you look up/create user.memStoreId and user.profileId here
-    // (from your own db, Memory API, etc)
     await sendIdentify(user);
     await sendTrack({
       userId: user.email || user.phone || user.name || 'anonymous-voice',
@@ -98,13 +96,35 @@ app.post('/api/signup', async (req, res) => {
       properties: { program: user.program }
     });
     await sendSms(user.phone, `Hi ${user.name}, welcome to the ${user.program}!`);
+
+    // Attempt to look up (find) an existing Memory profile for this phone
+    const memStoreId = process.env.DEFAULT_TWILIO_MEM_STORE_ID;
+    let profileId = null;
+
+    try {
+      const memoryApiUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles?Contact.phone=${encodeURIComponent(user.phone)}`;
+      const twilioAuth = {
+        username: process.env.TWILIO_SID,
+        password: process.env.TWILIO_TOKEN
+      };
+      const resp = await axios.get(memoryApiUrl, { auth: twilioAuth });
+
+      if (resp.data.profiles && resp.data.profiles.length > 0) {
+        profileId = resp.data.profiles[0].id;
+      }
+    } catch (err) {
+      console.error("Error fetching Memory profile by phone:", err?.response?.data || err?.message);
+    }
+
+    // --> Pass the real memStoreId and MAYBE-null profileId (if not found yet!) to sendVoice:
     await sendVoice(
       user.phone,
       user.name,
       user.program,
-      user.memStoreId,   // Should be the real Memory Store ID for *this user/conversation*
-      user.profileId     // Should be the real Memory Profile ID for this user
+      memStoreId,
+      profileId // will be null on very first call for a new user (fallbacks apply in ai-voice-convo)
     );
+
     res.json({ success: true, message: "Events sent and comms triggered." });
   } catch (err) {
     res.status(500).json({ error: err.toString() });
