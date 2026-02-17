@@ -146,7 +146,16 @@ app.all('/api/ai-voice-convo', async (req, res) => {
         };
         const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
         twilioTraits = profileResp.data.traits || {};
-        console.log('Twilio Memory traits:', JSON.stringify(twilioTraits, null, 2));
+        
+       console.log('Attempting to fetch Twilio Memory profile:', memStoreId, profileId);
+
+try {
+  const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
+  console.log('Raw Twilio Memory profileResp.data:', JSON.stringify(profileResp.data, null, 2));
+  twilioTraits = profileResp.data.traits || {};
+} catch (e) {
+  console.error('Failed Memory API fetch:', e?.response?.data || e?.message);
+}
 
         // Only extract from traits.Contact
         memPhone = (twilioTraits.Contact && twilioTraits.Contact.phone) ? twilioTraits.Contact.phone : null;
