@@ -128,73 +128,78 @@ app.all('/api/ai-voice-convo', async (req, res) => {
       console.error('Failed to fetch Segment traits for welcome prompt:', e?.response?.data || e?.message);
     }
 
-    // 2. Get Twilio Memory traits (using memStoreId/profileId, if available)
-   let twilioTraits = {};
-let phone = null;
-let favoriteExercise = null;
-try {
-  const memStoreId = queryMemStoreId || process.env.DEFAULT_TWILIO_MEM_STORE_ID || "YOUR_MEM_STORE_ID";
-  const profileId = queryProfileId && queryProfileId !== 'undefined'
-    ? queryProfileId
-    : null;
-  if (profileId && memStoreId) {
-    const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
-    const twilioAuth = {
-      username: process.env.TWILIO_SID,
-      password: process.env.TWILIO_TOKEN
-    };
-    const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
-    twilioTraits = profileResp.data.traits || {};
+    // 2. Get Twilio Memory traits with no duplicate 'let phone'
+    let twilioTraits = {};
+    let phone = null;
+    let favoriteExercise = null;
+    try {
+      const memStoreId = queryMemStoreId || process.env.DEFAULT_TWILIO_MEM_STORE_ID || "YOUR_MEM_STORE_ID";
+      const profileId = queryProfileId && queryProfileId !== 'undefined'
+        ? queryProfileId
+        : null;
+      if (profileId && memStoreId) {
+        const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
+        const twilioAuth = {
+          username: process.env.TWILIO_SID,
+          password: process.env.TWILIO_TOKEN
+        };
+        const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
+        twilioTraits = profileResp.data.traits || {};
 
-    // Only use the expected keys
-    phone = (twilioTraits.Contact && twilioTraits.Contact.phone) ? twilioTraits.Contact.phone : null;
+        // Use phone and favoriteExercise ONLY from traits.Contact
+        phone = (twilioTraits.Contact && twilioTraits.Contact.phone) ? twilioTraits.Contact.phone : null;
+        favoriteExercise = (twilioTraits.Contact && typeof twilioTraits.Contact.favoriteExercise === "string" && twilioTraits.Contact.favoriteExercise.trim() !== "")
+          ? twilioTraits.Contact.favoriteExercise
+          : null;
+      }
+    } catch (e) {
+      console.error('Failed fetch Twilio Memory traits for welcome prompt:', e?.response?.data || e?.message);
+      favoriteExercise = null;
+    }
 
-    favoriteExercise = (twilioTraits.Contact && typeof twilioTraits.Contact.favoriteExercise === "string" && twilioTraits.Contact.favoriteExercise.trim() !== "")
-      ? twilioTraits.Contact.favoriteExercise
-      : null;
+    // Only fallback if truly empty or null
+    if (!favoriteExercise) {
+      favoriteExercise = "exercise";
+    }
+
+    const firstName = profileTraits.first_name || profileTraits.name || "there";
+    const activeProgram = profileTraits.program || "one of our health programs";
+    const additionalProgram = profileTraits.additional_program || "";
+
+    const welcomePrompt =
+      `Hello, ${firstName}! Welcome to the ${activeProgram}` +
+      `${(additionalProgram && additionalProgram !== activeProgram) ? " and " + additionalProgram : ""} program${(additionalProgram && additionalProgram !== activeProgram) ? "s" : ""} at Carelon Health. ` +
+      `I see your favorite exercise is ${favoriteExercise}. ` +
+      `I'm here to provide tailored assistance and next steps. ` +
+      `Would you like an overview of your program, hear about Wellness Coaching, Smoking Cessation, or Diabetes Prevention, or enroll in a new program?`;
+
+    const wsUrl =
+      `wss://carelon-demo.onrender.com/conversation-relay?userId=${encodeURIComponent(userId)}`
+        + (queryMemStoreId ? `&memStoreId=${encodeURIComponent(queryMemStoreId)}` : '')
+        + (queryProfileId ? `&profileId=${encodeURIComponent(queryProfileId)}` : '');
+
+    const twiml =
+      `<Response>
+         <Connect>
+           <ConversationRelay
+             url="${xmlEscape(wsUrl)}"
+             transcriptionEnabled="true"
+             clientParticipantIdentity="${xmlEscape("user_" + userId)}"
+             clientDisplayName="Participant"
+             botParticipantIdentity="carelon_ai_agent"
+             botDisplayName="Carelon AI Assistant"
+             welcomeGreeting="${xmlEscape(welcomePrompt)}"
+           />
+         </Connect>
+       </Response>`;
+
+    res.type('text/xml');
+    res.send(twiml);
+  } catch (err) {
+    console.error('ai-voice-convo error:', err);
+    res.status(500).send('Internal error');
   }
-} catch (e) {
-  console.error('Failed fetch Twilio Memory traits for welcome prompt:', e?.response?.data || e?.message);
-  favoriteExercise = null;
-}
 
-if (!favoriteExercise) {
-  favoriteExercise = "exercise";
-}
-
-const firstName = profileTraits.first_name || profileTraits.name || "there";
-const activeProgram = profileTraits.program || "one of our health programs";
-const additionalProgram = profileTraits.additional_program || "";
-
-const welcomePrompt =
-  `Hello, ${firstName}! Welcome to the ${activeProgram}` +
-  `${(additionalProgram && additionalProgram !== activeProgram) ? " and " + additionalProgram : ""} program${(additionalProgram && additionalProgram !== activeProgram) ? "s" : ""} at Carelon Health. ` +
-  `I see your favorite exercise is ${favoriteExercise}. ` +
-  `I'm here to provide tailored assistance and next steps. ` +
-  `Would you like an overview of your program, hear about Wellness Coaching, Smoking Cessation, or Diabetes Prevention, or enroll in a new program?`;
-
-const wsUrl =
-  `wss://carelon-demo.onrender.com/conversation-relay?userId=${encodeURIComponent(userId)}`
-    + (queryMemStoreId ? `&memStoreId=${encodeURIComponent(queryMemStoreId)}` : '')
-    + (queryProfileId ? `&profileId=${encodeURIComponent(queryProfileId)}` : '');
-
-const twiml =
-  `<Response>
-     <Connect>
-       <ConversationRelay
-         url="${xmlEscape(wsUrl)}"
-         transcriptionEnabled="true"
-         clientParticipantIdentity="${xmlEscape("user_" + userId)}"
-         clientDisplayName="Participant"
-         botParticipantIdentity="carelon_ai_agent"
-         botDisplayName="Carelon AI Assistant"
-         welcomeGreeting="${xmlEscape(welcomePrompt)}"
-       />
-     </Connect>
-   </Response>`;
-
-res.type('text/xml');
-res.send(twiml);
 
 //----------------------------------------------------------
 // HEALTHCHECK
