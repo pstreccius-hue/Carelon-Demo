@@ -50,15 +50,8 @@ app.post('/webhook/conversational-intelligence', async (req, res) => {
             const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
             const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
             const traits = profileResp.data.traits || {};
-            const phone =
-              traits.phone ||
-              traits.phone_number ||
-              (traits.Contact && (traits.Contact.phone || traits.Contact.phone_number));
-            const favoriteExercise =
-              traits.favoriteExercise ||
-              traits.favorite_exercise ||
-              (traits.Contact && (traits.Contact.favoriteExercise || traits.Contact.favorite_exercise)) ||
-  "exercise";
+            const phone = traits.Contact && traits.Contact.phone ? traits.Contact.phone : null;
+            const favoriteExercise = traits.Contact && traits.Contact.favoriteExercise ? traits.Contact.favoriteExercise : "exercise";
             if (phone) {
               await sendTrack({
                 userId: phone,
@@ -136,7 +129,8 @@ app.all('/api/ai-voice-convo', async (req, res) => {
     }
 
     // 2. Get Twilio Memory traits (using memStoreId/profileId, if available)
-    let twilioTraits = {};
+   let twilioTraits = {};
+let phone = null;
 let favoriteExercise = null;
 try {
   const memStoreId = queryMemStoreId || process.env.DEFAULT_TWILIO_MEM_STORE_ID || "YOUR_MEM_STORE_ID";
@@ -152,64 +146,55 @@ try {
     const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
     twilioTraits = profileResp.data.traits || {};
 
-    // 💡 Only use this precise key structure for your trait extraction:
-    if (twilioTraits.Contact && typeof twilioTraits.Contact.favoriteExercise === 'string' && twilioTraits.Contact.favoriteExercise.trim() !== '') {
-      favoriteExercise = twilioTraits.Contact.favoriteExercise;
-    } else {
-      favoriteExercise = "exercise";
-    }
+    // Only use the expected keys
+    phone = (twilioTraits.Contact && twilioTraits.Contact.phone) ? twilioTraits.Contact.phone : null;
+
+    favoriteExercise = (twilioTraits.Contact && typeof twilioTraits.Contact.favoriteExercise === "string" && twilioTraits.Contact.favoriteExercise.trim() !== "")
+      ? twilioTraits.Contact.favoriteExercise
+      : null;
   }
 } catch (e) {
   console.error('Failed fetch Twilio Memory traits for welcome prompt:', e?.response?.data || e?.message);
+  favoriteExercise = null;
+}
+
+if (!favoriteExercise) {
   favoriteExercise = "exercise";
 }
-    // 3. Fallback: use favoriteExercise from Segment or fallback string if not set above
-    if (!favoriteExercise) {
-      favoriteExercise =
-        profileTraits.favoriteExercise ||
-        profileTraits.favorite_exercise ||
-        "exercise";
-    }
 
-    const firstName = profileTraits.first_name || profileTraits.name || "there";
-    const activeProgram = profileTraits.program || "one of our health programs";
-    const additionalProgram = profileTraits.additional_program || "";
+const firstName = profileTraits.first_name || profileTraits.name || "there";
+const activeProgram = profileTraits.program || "one of our health programs";
+const additionalProgram = profileTraits.additional_program || "";
 
-    const welcomePrompt =
-      `Hello, ${firstName}! Welcome to the ${activeProgram}` +
-      `${(additionalProgram && additionalProgram !== activeProgram) ? " and " + additionalProgram : ""} program${(additionalProgram && additionalProgram !== activeProgram) ? "s" : ""} at Carelon Health. ` +
-      `I see your favorite exercise is ${favoriteExercise}. ` +
-      `I'm here to provide tailored assistance and next steps. ` +
-      `Would you like an overview of your program, hear about Wellness Coaching, Smoking Cessation, or Diabetes Prevention, or enroll in a new program?`;
+const welcomePrompt =
+  `Hello, ${firstName}! Welcome to the ${activeProgram}` +
+  `${(additionalProgram && additionalProgram !== activeProgram) ? " and " + additionalProgram : ""} program${(additionalProgram && additionalProgram !== activeProgram) ? "s" : ""} at Carelon Health. ` +
+  `I see your favorite exercise is ${favoriteExercise}. ` +
+  `I'm here to provide tailored assistance and next steps. ` +
+  `Would you like an overview of your program, hear about Wellness Coaching, Smoking Cessation, or Diabetes Prevention, or enroll in a new program?`;
 
-    const wsUrl =
-      `wss://carelon-demo.onrender.com/conversation-relay?userId=${encodeURIComponent(userId)}`
-        + (queryMemStoreId ? `&memStoreId=${encodeURIComponent(queryMemStoreId)}` : '')
-        + (queryProfileId ? `&profileId=${encodeURIComponent(queryProfileId)}` : '');
+const wsUrl =
+  `wss://carelon-demo.onrender.com/conversation-relay?userId=${encodeURIComponent(userId)}`
+    + (queryMemStoreId ? `&memStoreId=${encodeURIComponent(queryMemStoreId)}` : '')
+    + (queryProfileId ? `&profileId=${encodeURIComponent(queryProfileId)}` : '');
 
-    const twiml =
-      `<Response>
-         <Connect>
-           <ConversationRelay
-             url="${xmlEscape(wsUrl)}"
-             transcriptionEnabled="true"
-             clientParticipantIdentity="${xmlEscape("user_" + userId)}"
-             clientDisplayName="Participant"
-             botParticipantIdentity="carelon_ai_agent"
-             botDisplayName="Carelon AI Assistant"
-             welcomeGreeting="${xmlEscape(welcomePrompt)}"
-           />
-         </Connect>
-       </Response>`;
+const twiml =
+  `<Response>
+     <Connect>
+       <ConversationRelay
+         url="${xmlEscape(wsUrl)}"
+         transcriptionEnabled="true"
+         clientParticipantIdentity="${xmlEscape("user_" + userId)}"
+         clientDisplayName="Participant"
+         botParticipantIdentity="carelon_ai_agent"
+         botDisplayName="Carelon AI Assistant"
+         welcomeGreeting="${xmlEscape(welcomePrompt)}"
+       />
+     </Connect>
+   </Response>`;
 
-    res.type('text/xml');
-    res.send(twiml);
-
-  } catch (err) {
-    console.error('ai-voice-convo error:', err);
-    res.status(500).send('Internal error');
-  }
-});
+res.type('text/xml');
+res.send(twiml);
 
 //----------------------------------------------------------
 // HEALTHCHECK
