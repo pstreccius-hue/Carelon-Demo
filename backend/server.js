@@ -54,6 +54,7 @@ app.post('/webhook/conversational-intelligence', async (req, res) => {
               traits.phone ||
               traits.phone_number ||
               (traits.Contact && (traits.Contact.phone || traits.Contact.phone_number));
+            const favoriteExercise = traits.favoriteExercise || traits.favorite_exercise || "exercise";
             if (phone) {
               await sendTrack({
                 userId: phone,
@@ -62,6 +63,10 @@ app.post('/webhook/conversational-intelligence', async (req, res) => {
                   most_recent_call_summary: summary,
                   mem_profile_id: profileId
                 }
+              });
+              await sendIdentify({
+                userId: phone,
+                traits: { favoriteExercise }
               });
               console.log(`[CI webhook] Sent Call Summary event to Segment for phone ${phone}`);
             } else {
@@ -115,6 +120,11 @@ app.all('/api/ai-voice-convo', async (req, res) => {
 
     const { phone } = req.query;
     const userId = phone || 'anonymous';
+    const favoriteExercise =
+  profileTraits.favoriteExercise ||
+  profileTraits.favorite_exercise ||
+  (profileTraits.Contact && (profileTraits.Contact.favoriteExercise || profileTraits.Contact.favorite_exercise)) ||
+  "exercise";
 
     let profileTraits = {};
     try {
@@ -132,6 +142,7 @@ app.all('/api/ai-voice-convo', async (req, res) => {
     const welcomePrompt =
       `Hello, ${firstName}! Welcome to the ${activeProgram}` +
       `${(additionalProgram && additionalProgram !== activeProgram) ? " and " + additionalProgram : ""} program${(additionalProgram && additionalProgram !== activeProgram) ? "s" : ""} at Carelon Health. ` +
+      `I see your favorite exercise is ${favoriteExercise}. ` *
       `I'm here to provide tailored assistance and next steps. ` +
       `Would you like an overview of your program, hear about Wellness Coaching, Smoking Cessation, or Diabetes Prevention, or enroll in a new program?`;
 
@@ -191,6 +202,11 @@ wss.on('connection', (ws, req) => {
       const firstName = profileTraits.first_name || profileTraits.name || "there";
       const activeProgram = profileTraits.program || "one of our health programs";
       const additionalProgram = profileTraits.additional_program || "one of our health programs";
+      const favoriteExercise =
+  profileTraits.favoriteExercise ||
+  profileTraits.favorite_exercise ||
+  (profileTraits.Contact && (profileTraits.Contact.favoriteExercise || profileTraits.Contact.favorite_exercise)) ||
+  "exercise";
 
       switch (data.type) {
         case "setup":
@@ -200,7 +216,7 @@ wss.on('connection', (ws, req) => {
 
           const systemPrompt = `You are Carelon Health's automated agent on a phone call.
 - Greet the user by first name (${firstName}).
-- Mention their active program (${activeProgram}) and any (${additionalProgram}) , and offer tailored assistance or next steps.
+- Mention their active program (${activeProgram}) and any (${additionalProgram}) and that their favorite exercise is ${favoriteExercise}. Then offer tailored assistance or next steps.
 - If the user requests an overview of a program, provide a friendly, high-level (never clinical or with PII) overview, but only give the same program's overview once per call (do not repeat overviews already provided in the conversation history).
 - The main program is "${activeProgram}". Other available programs are: Wellness Coaching, Smoking Cessation, Diabetes Prevention.
 - If the user asks to enroll in another program, confirm their enrollment, thank them, and then ask if they have any more questions or want to enroll in any other programs.
