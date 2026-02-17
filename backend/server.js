@@ -88,6 +88,9 @@ app.post('/webhook/conversational-intelligence', async (req, res) => {
 
 app.post('/api/signup', async (req, res) => {
   const user = req.body;
+  const memStoreId = process.env.DEFAULT_TWILIO_MEM_STORE_ID;
+  let profileId = null;
+
   try {
     await sendIdentify(user);
     await sendTrack({
@@ -97,32 +100,30 @@ app.post('/api/signup', async (req, res) => {
     });
     await sendSms(user.phone, `Hi ${user.name}, welcome to the ${user.program}!`);
 
-    // Attempt to look up (find) an existing Memory profile for this phone
-    const memStoreId = process.env.DEFAULT_TWILIO_MEM_STORE_ID;
-    let profileId = null;
-
+    // Use the Twilio Memory Store Lookup endpoint (idType: phone)
     try {
-      const memoryApiUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles?Contact.phone=${encodeURIComponent(user.phone)}`;
+      const lookupUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/Lookup`;
       const twilioAuth = {
         username: process.env.TWILIO_SID,
         password: process.env.TWILIO_TOKEN
       };
-      const resp = await axios.get(memoryApiUrl, { auth: twilioAuth });
-
-      if (resp.data.profiles && resp.data.profiles.length > 0) {
-        profileId = resp.data.profiles[0].id;
-      }
+      const cleanPhone = user.phone.replace(/[^+\d]/g, ''); // Remove dashes/spaces, keep + and digits
+      const resp = await axios.post(lookupUrl, {
+        idType: "phone",
+        value: cleanPhone
+      }, { auth: twilioAuth });
+      profileId = resp.data.id;
+      console.log(`Profile ID found/created: ${profileId}`);
     } catch (err) {
-      console.error("Error fetching Memory profile by phone:", err?.response?.data || err?.message);
+      console.error('Error using Memory Profiles/Lookup:', err?.response?.data || err?.message);
     }
 
-    // --> Pass the real memStoreId and MAYBE-null profileId (if not found yet!) to sendVoice:
     await sendVoice(
       user.phone,
       user.name,
       user.program,
       memStoreId,
-      profileId // will be null on very first call for a new user (fallbacks apply in ai-voice-convo)
+      profileId
     );
 
     res.json({ success: true, message: "Events sent and comms triggered." });
