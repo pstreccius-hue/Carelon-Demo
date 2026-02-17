@@ -30,8 +30,6 @@ async function getSegmentProfileByPhone(phone) {
 //---- Conversation Intelligence Webhook with Memory API Phone Lookup ----//
 app.post('/webhook/conversational-intelligence', async (req, res) => {
   try {
-    console.log('===== FULL CI WEBHOOK PAYLOAD =====');
-    console.log(JSON.stringify(req.body, null, 2));
     const operatorResults = req.body.operatorResults || [];
     for (const op of operatorResults) {
       if (op.result && op.result.summary) {
