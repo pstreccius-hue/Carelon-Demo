@@ -156,7 +156,8 @@ try {
   if (userId && userId.startsWith('+')) {
     profileTraits = await getSegmentProfileByPhone(userId);
   }
-} catch (e) { ... }
+} catch (e) { console.error('Failed to fetch Segment traits for welcome prompt:', e?.response?.data || e?.message);
+}
 
 // Get Twilio Memory traits
 let twilioTraits = {};
@@ -164,7 +165,8 @@ try {
   if (userId && userId.startsWith('+')) {
     twilioTraits = await getTwilioMemoryProfileByPhone(userId);
   }
-} catch (e) { ... }
+} catch (e) { console.error('Failed to fetch Twilio Memory profile by phone:', e?.response?.data || e?.message);
+}
 
 // Extract traits
 const firstName = profileTraits.first_name || profileTraits.name || "there";
