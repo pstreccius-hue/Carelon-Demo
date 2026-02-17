@@ -6,9 +6,9 @@ exports.sendSms = (to, body) =>
   client.messages.create({ body, to, from: TWILIO_NUMBER });
 
 // Updated: All new voice calls use your AI voice agent route
-exports.sendVoice = (to, name, program) =>
+exports.sendVoice = (to, name, program, memStoreId, profileId) =>
   client.calls.create({
     to,
     from: TWILIO_NUMBER,
-    url: `https://carelon-demo.onrender.com/api/ai-voice-convo?firstName=${encodeURIComponent(name.split(' ')[0])}&program=${encodeURIComponent(program)}&phone=${encodeURIComponent(to)}`
+    url: `https://carelon-demo.onrender.com/api/ai-voice-convo?firstName=${encodeURIComponent(name.split(' ')[0])}&program=${encodeURIComponent(program)}&phone=${encodeURIComponent(to)}&memStoreId=${encodeURIComponent(memStoreId)}&profileId=${encodeURIComponent(profileId)}`
   });
