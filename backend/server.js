@@ -138,6 +138,7 @@ app.all('/api/ai-voice-convo', async (req, res) => {
       const profileId = queryProfileId && queryProfileId !== 'undefined'
         ? queryProfileId
         : null;
+      console.log('ai-voice-convo -- Using memStoreId:', memStoreId, 'profileId:', profileId);
       if (profileId && memStoreId) {
         const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
         const twilioAuth = {
@@ -146,7 +147,7 @@ app.all('/api/ai-voice-convo', async (req, res) => {
         };
         const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
         twilioTraits = profileResp.data.traits || {};
-        
+        console.log('ai-voice-convo -- Twilio Memory traits:', JSON.stringify(twilioTraits, null, 2));
        console.log('Attempting to fetch Twilio Memory profile:', memStoreId, profileId);
 
 try {
