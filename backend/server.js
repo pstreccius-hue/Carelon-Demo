@@ -54,7 +54,11 @@ app.post('/webhook/conversational-intelligence', async (req, res) => {
               traits.phone ||
               traits.phone_number ||
               (traits.Contact && (traits.Contact.phone || traits.Contact.phone_number));
-            const favoriteExercise = traits.favoriteExercise || traits.favorite_exercise || (traits.Contact && (traits.Contact.favoriteExercise || traits.Contact.favorite_exercise)) || "exercise";
+            const favoriteExercise =
+              traits.favoriteExercise ||
+              traits.favorite_exercise ||
+              (traits.Contact && (traits.Contact.favoriteExercise || traits.Contact.favorite_exercise)) ||
+  "exercise";
             if (phone) {
               await sendTrack({
                 userId: phone,
@@ -118,9 +122,10 @@ app.all('/api/ai-voice-convo', async (req, res) => {
         .replace(/>/g, '&gt;');
     }
 
-    const { phone } = req.query;
+    const { phone, memStoreId: queryMemStoreId, profileId: queryProfileId } = req.query;
     const userId = phone || 'anonymous';
 
+    // 1. Get Segment profile
     let profileTraits = {};
     try {
       if (userId && userId.startsWith('+')) {
@@ -129,16 +134,47 @@ app.all('/api/ai-voice-convo', async (req, res) => {
     } catch (e) {
       console.error('Failed to fetch Segment traits for welcome prompt:', e?.response?.data || e?.message);
     }
+
+    // 2. Get Twilio Memory traits (using memStoreId/profileId, if available)
+    let twilioTraits = {};
+    let favoriteExercise = null;
+    try {
+      // Prefer profileId/memStoreId from query if provided, else fallback
+      const memStoreId = queryMemStoreId || process.env.DEFAULT_TWILIO_MEM_STORE_ID || "YOUR_MEM_STORE_ID";
+      const profileId = queryProfileId && queryProfileId !== 'undefined'
+        ? queryProfileId
+        : null;
+      if (profileId && memStoreId) {
+        const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
+        const twilioAuth = {
+          username: process.env.TWILIO_SID,
+          password: process.env.TWILIO_TOKEN
+        };
+        const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
+        twilioTraits = profileResp.data.traits || {};
+        favoriteExercise =
+            (twilioTraits.Contact && twilioTraits.Contact.favoriteExercise) ||
+            twilioTraits.favoriteExercise ||
+            twilioTraits.favorite_exercise ||
+            (twilioTraits.Contact && twilioTraits.Contact.favorite_exercise) ||
+            null;
+      }
+    } catch (e) {
+      console.error('Failed fetch Twilio Memory traits for welcome prompt:', e?.response?.data || e?.message);
+    }
+
+    // 3. Fallback: use favoriteExercise from Segment or fallback string if not set above
+    if (!favoriteExercise) {
+      favoriteExercise =
+        profileTraits.favoriteExercise ||
+        profileTraits.favorite_exercise ||
+        "exercise";
+    }
+
     const firstName = profileTraits.first_name || profileTraits.name || "there";
     const activeProgram = profileTraits.program || "one of our health programs";
     const additionalProgram = profileTraits.additional_program || "";
-    const favoriteExercise =
-      profileTraits.favoriteExercise ||
-      profileTraits.favorite_exercise ||
-      (profileTraits.Contact && (profileTraits.Contact.favoriteExercise || profileTraits.Contact.favorite_exercise)) ||
-      "exercise";
 
-    // PERSONALIZED WELCOME PROMPT!
     const welcomePrompt =
       `Hello, ${firstName}! Welcome to the ${activeProgram}` +
       `${(additionalProgram && additionalProgram !== activeProgram) ? " and " + additionalProgram : ""} program${(additionalProgram && additionalProgram !== activeProgram) ? "s" : ""} at Carelon Health. ` +
@@ -146,7 +182,11 @@ app.all('/api/ai-voice-convo', async (req, res) => {
       `I'm here to provide tailored assistance and next steps. ` +
       `Would you like an overview of your program, hear about Wellness Coaching, Smoking Cessation, or Diabetes Prevention, or enroll in a new program?`;
 
-    const wsUrl = `wss://carelon-demo.onrender.com/conversation-relay?userId=${encodeURIComponent(userId)}`;
+    const wsUrl =
+      `wss://carelon-demo.onrender.com/conversation-relay?userId=${encodeURIComponent(userId)}`
+        + (queryMemStoreId ? `&memStoreId=${encodeURIComponent(queryMemStoreId)}` : '')
+        + (queryProfileId ? `&profileId=${encodeURIComponent(queryProfileId)}` : '');
+
     const twiml =
       `<Response>
          <Connect>
@@ -164,6 +204,7 @@ app.all('/api/ai-voice-convo', async (req, res) => {
 
     res.type('text/xml');
     res.send(twiml);
+
   } catch (err) {
     console.error('ai-voice-convo error:', err);
     res.status(500).send('Internal error');
