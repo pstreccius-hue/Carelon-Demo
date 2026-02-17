@@ -107,24 +107,35 @@ app.post('/webhook/conversational-intelligence', async (req, res) => {
   }
 });
 
-app.post('/api/signup', async (req, res) => {
-  const user = req.body;
-  try {
-    await sendIdentify(user);
-    await sendTrack({
-      userId: user.email || user.phone || user.name || 'anonymous-voice',
-      event: "Program Enrolled",
-      properties: { program: user.program }
-    });
-    await sendSms(user.phone, `Hi ${user.name}, welcome to the ${user.program}!`);
+const memStoreId = process.env.DEFAULT_TWILIO_MEM_STORE_ID;
+let profileId = null;
 
-    // Do not try to look up MemStore/profileId here; let Twilio create on first call
-    await sendVoice(
-      user.phone,
-      user.name,
-      user.program
-      // no memStoreId, profileId yet
-    );
+try {
+  // use Memory Profiles/Lookup as above
+  // Example for phone "+17017211093":
+  const lookupUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/Lookup`;
+  const twilioAuth = {
+    username: process.env.TWILIO_SID,
+    password: process.env.TWILIO_TOKEN
+  };
+  const resp = await axios.post(lookupUrl, {
+    idType: "phone",
+    value: user.phone // Ensure this is in E.164 i.e. "+17017211093"
+  }, { auth: twilioAuth });
+  profileId = resp.data.id;
+  console.log('Resolved profileId:', profileId);
+} catch (err) {
+  // fallback or log error
+  console.error('Error using Memory Profiles/Lookup:', err?.response?.data || err?.message);
+}
+
+await sendVoice(
+  user.phone,
+  user.name,
+  user.program,
+  memStoreId,
+  profileId
+);
 
     res.json({ success: true, message: "Events sent and comms triggered." });
   } catch (err) {
@@ -148,7 +159,7 @@ app.all('/api/ai-voice-convo', async (req, res) => {
 
     // Extract ONLY from query parameters
     const { phone: queryPhone, memStoreId: queryMemStoreId, profileId: queryProfileId } = req.query;
-    const userId = phone || 'anonymous';
+    const userId = queryphone || 'anonymous';
 
 // Get Segment traits
 let profileTraits = {};
