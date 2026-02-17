@@ -113,9 +113,13 @@ app.all('/api/ai-voice-convo', async (req, res) => {
         .replace(/>/g, '&gt;');
     }
 
-    // Use explicit naming to avoid let phone re-declaration conflict
     const { phone: queryPhone, memStoreId: queryMemStoreId, profileId: queryProfileId } = req.query;
     const userId = queryPhone || 'anonymous';
+
+    // Lookup Memory IDs using the phone if not explicitly provided
+    const memProfileInfo = phoneToMemoryProfile[userId] || {};
+    const memStoreId = queryMemStoreId || memProfileInfo.memStoreId || process.env.DEFAULT_TWILIO_MEM_STORE_ID || "YOUR_MEM_STORE_ID";
+    const profileId = queryProfileId || memProfileInfo.profileId || null;
 
     // 1. Get Segment profile
     let profileTraits = {};
@@ -127,16 +131,11 @@ app.all('/api/ai-voice-convo', async (req, res) => {
       console.error('Failed to fetch Segment traits for welcome prompt:', e?.response?.data || e?.message);
     }
 
-    // 2. Get Twilio Memory traits (and only DECLARE ONCE!)
+    // 2. Get Twilio Memory traits with no duplicate 'let phone'
     let twilioTraits = {};
-    let memPhone = null;
+    let phone = null;
     let favoriteExercise = null;
     try {
-      const memStoreId = queryMemStoreId || process.env.DEFAULT_TWILIO_MEM_STORE_ID || "YOUR_MEM_STORE_ID";
-      const profileId = queryProfileId && queryProfileId !== 'undefined'
-        ? queryProfileId
-        : null;
-      console.log('ai-voice-convo -- Using memStoreId:', memStoreId, 'profileId:', profileId);
       if (profileId && memStoreId) {
         const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
         const twilioAuth = {
@@ -145,30 +144,16 @@ app.all('/api/ai-voice-convo', async (req, res) => {
         };
         const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
         twilioTraits = profileResp.data.traits || {};
-        console.log('ai-voice-convo -- Twilio Memory traits:', JSON.stringify(twilioTraits, null, 2));
-       console.log('Attempting to fetch Twilio Memory profile:', memStoreId, profileId);
-
-try {
-  const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
-  console.log('Raw Twilio Memory profileResp.data:', JSON.stringify(profileResp.data, null, 2));
-  twilioTraits = profileResp.data.traits || {};
-} catch (e) {
-  console.error('Failed Memory API fetch:', e?.response?.data || e?.message);
-}
-
-        // Only extract from traits.Contact
-        memPhone = (twilioTraits.Contact && twilioTraits.Contact.phone) ? twilioTraits.Contact.phone : null;
-        favoriteExercise =
-          (twilioTraits.Contact && typeof twilioTraits.Contact.favoriteExercise === "string" && twilioTraits.Contact.favoriteExercise.trim() !== "")
-            ? twilioTraits.Contact.favoriteExercise
-            : null;
+        phone = (twilioTraits.Contact && twilioTraits.Contact.phone) ? twilioTraits.Contact.phone : null;
+        favoriteExercise = (twilioTraits.Contact && typeof twilioTraits.Contact.favoriteExercise === "string" && twilioTraits.Contact.favoriteExercise.trim() !== "")
+          ? twilioTraits.Contact.favoriteExercise
+          : null;
       }
     } catch (e) {
       console.error('Failed fetch Twilio Memory traits for welcome prompt:', e?.response?.data || e?.message);
       favoriteExercise = null;
     }
 
-    // Only fallback if truly empty or null
     if (!favoriteExercise) {
       favoriteExercise = "exercise";
     }
@@ -186,8 +171,8 @@ try {
 
     const wsUrl =
       `wss://carelon-demo.onrender.com/conversation-relay?userId=${encodeURIComponent(userId)}`
-        + (queryMemStoreId ? `&memStoreId=${encodeURIComponent(queryMemStoreId)}` : '')
-        + (queryProfileId ? `&profileId=${encodeURIComponent(queryProfileId)}` : '');
+        + (memStoreId ? `&memStoreId=${encodeURIComponent(memStoreId)}` : '')
+        + (profileId ? `&profileId=${encodeURIComponent(profileId)}` : '');
 
     const twiml =
       `<Response>
