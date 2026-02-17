@@ -66,18 +66,7 @@ app.post('/webhook/conversational-intelligence', async (req, res) => {
               });
               console.log(`[CI webhook] Sent Call Summary event to Segment for phone ${phone}`);
 
-              // 🚀 TRIGGER OUTBOUND VOICE CALL (real time)
-              // Use name/program from your DB/user record, or as placeholder
-              const userName = traits.name || "User"; // adapt to your real data model
-              const userProgram = traits.program || "Health Program"; // adapt if needed
-
-              await sendVoice(
-                phone,
-                userName,
-                userProgram,
-                memStoreId,
-                profileId
-              );
+             
               console.log(`[CI webhook] Outbound call triggered to ${phone} (memStoreId: ${memStoreId}, profileId: ${profileId})`);
             } else {
               console.warn('[CI webhook] No phone found in Twilio Memory profile.', profileResp.data);
