@@ -18,7 +18,7 @@ app.use(express.urlencoded({ extended: true }));
 async function getSegmentProfileByPhone(phone) {
   const SEGMENT_SPACE_ID = process.env.SEGMENT_SPACE_ID;
   const SEGMENT_PROFILE_TOKEN = process.env.SEGMENT_PROFILE_TOKEN;
-  const url = `https://profiles.segment.com/v1/spaces/${SEGMENT_SPACE_ID}/collections/users/profiles/user_id:${encodeURIComponent(userId)}/traits?limit=200`;
+  const url = `https://profiles.segment.com/v1/spaces/${SEGMENT_SPACE_ID}/collections/users/profiles/user_id:${encodeURIComponent(phone)}/traits?limit=200`;
   const response = await axios.get(url, {
     headers: {
       Authorization: `Basic ${Buffer.from(SEGMENT_PROFILE_TOKEN + ':').toString('base64')}`
@@ -33,21 +33,30 @@ async function getTwilioMemoryProfileByPhone(phone) {
     username: process.env.TWILIO_SID,
     password: process.env.TWILIO_TOKEN
   };
+  let profileId = null;
+  let traits = {};
   try {
     const lookupUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/Lookup`;
     const resp = await axios.post(lookupUrl, {
       idType: "phone",
       value: phone
     }, { auth: twilioAuth });
-    console.log('Lookup Memory response:', JSON.stringify(resp.data, null, 2));
-    // Fetch the full traits using the new profileId
-    const profileId = resp.data.id;
-    const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
-    const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
-    return {profileId, traits: profileResp.data.traits || {}};
+    // Try both .profiles array (newer APIs) and .id (older Memory)
+    if (Array.isArray(resp.data.profiles) && resp.data.profiles.length > 0) {
+      profileId = resp.data.profiles[0];
+    } else if (resp.data.id) {
+      profileId = resp.data.id;
+    }
+
+    if (profileId) {
+      const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
+      const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
+      traits = profileResp.data.traits || {};
+    }
+    return { profileId, traits };
   } catch (err) {
     console.error("Error fetching Twilio Memory profile by phone:", err?.response?.data || err?.message);
-    return {profileId: null, traits: {}};
+    return { profileId: null, traits: {} };
   }
 }
 
@@ -126,56 +135,56 @@ app.all('/api/ai-voice-convo', async (req, res) => {
     }
 
     const { phone: queryPhone, memStoreId: queryMemStoreId, profileId: queryProfileId } = req.query;
-    const userId = queryPhone || 'anonymous';
+const userId = queryPhone || 'anonymous';
 
-    // Use query params to fetch Memory traits (recommended)
-    const memStoreId = queryMemStoreId || process.env.DEFAULT_TWILIO_MEM_STORE_ID;
-    const profileId = queryProfileId && queryProfileId !== 'undefined' ? queryProfileId : null;
+// Use query params to fetch Memory traits (recommended)
+const memStoreId = queryMemStoreId || process.env.DEFAULT_TWILIO_MEM_STORE_ID;
+const profileId = queryProfileId && queryProfileId !== 'undefined' ? queryProfileId : null;
 
-    // 1. Get Segment profile traits
-    let traits = {};
-    try {
-      if (userId && userId.startsWith('+')) {
-        traits = await getSegmentProfileByPhone(userId);
-        console.log('Segment traits for', userId, ':', JSON.stringify(profileTraits, null, 2));
-      }
-    } catch (e) {
-      console.error('Failed to fetch Segment traits for welcome prompt:', e?.response?.data || e?.message);
-    }
+// 1. Get Segment profile traits
+let traits = {};
+try {
+  if (userId && userId.startsWith('+')) {
+    traits = await getSegmentProfileByPhone(userId);
+    console.log('Segment traits for', userId, ':', JSON.stringify(traits, null, 2));
+  }
+} catch (e) {
+  console.error('Failed to fetch Segment traits for welcome prompt:', e?.response?.data || e?.message);
+}
 
-    // 2. Get Twilio Memory traits using profileId
-    let twilioTraits = {};
-    let favoriteExercise = null;
-    if (profileId && memStoreId) {
-      try {
-        const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
-        const twilioAuth = {
-          username: process.env.TWILIO_SID,
-          password: process.env.TWILIO_TOKEN
-        };
-        const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
-        twilioTraits = profileResp.data.traits || {};
-        favoriteExercise = (twilioTraits.Contact && typeof twilioTraits.Contact.favoriteExercise === "string" && twilioTraits.Contact.favoriteExercise.trim() !== "")
-          ? twilioTraits.Contact.favoriteExercise
-          : null;
-      } catch (e) {
-        console.error('Failed to fetch Twilio traits by profileId for welcome prompt:', e?.response?.data || e?.message);
-      }
-    }
-    if (!favoriteExercise) {
-      favoriteExercise = "exercise";
-    }
+// 2. Get Twilio Memory traits using profileId (if available)
+let twilioTraits = {};
+let favoriteExercise = null;
+if (profileId && memStoreId) {
+  try {
+    const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
+    const twilioAuth = {
+      username: process.env.TWILIO_SID,
+      password: process.env.TWILIO_TOKEN
+    };
+    const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
+    twilioTraits = profileResp.data.traits || {};
+    favoriteExercise = (twilioTraits.Contact && typeof twilioTraits.Contact.favoriteExercise === "string" && twilioTraits.Contact.favoriteExercise.trim() !== "")
+      ? twilioTraits.Contact.favoriteExercise
+      : null;
+  } catch (e) {
+    console.error('Failed to fetch Twilio traits by profileId for welcome prompt:', e?.response?.data || e?.message);
+  }
+}
+if (!favoriteExercise) {
+  favoriteExercise = "exercise";
+}
 
-    const firstName = traits.first_name || traits.name || "there";
-    const activeProgram = traits.program || "one of our health programs";
-    const additionalProgram = traits.additional_program || "";
+const firstName = traits.first_name || traits.name || "there";
+const activeProgram = traits.program || "one of our health programs";
+const additionalProgram = traits.additional_program || "";
 
-    const welcomePrompt =
-      `Hello, ${firstName}! Welcome to the ${activeProgram}` +
-      `${(additionalProgram && additionalProgram !== activeProgram) ? " and " + additionalProgram : ""} program${(additionalProgram && additionalProgram !== activeProgram) ? "s" : ""} at Carelon Health. ` +
-      `I see your favorite exercise is ${favoriteExercise}. ` +
-      `I'm here to provide tailored assistance and next steps. ` +
-      `Would you like an overview of your program, hear about Wellness Coaching, Smoking Cessation, or Diabetes Prevention, or enroll in a new program?`;
+const welcomePrompt =
+  `Hello, ${firstName}! Welcome to the ${activeProgram}` +
+  `${(additionalProgram && additionalProgram !== activeProgram) ? " and " + additionalProgram : ""} program${(additionalProgram && additionalProgram !== activeProgram) ? "s" : ""} at Carelon Health. ` +
+  `I see your favorite exercise is ${favoriteExercise}. ` +
+  `I'm here to provide tailored assistance and next steps. ` +
+  `Would you like an overview of your program, hear about Wellness Coaching, Smoking Cessation, or Diabetes Prevention, or enroll in a new program?`;
 
     const wsUrl =
       `wss://carelon-demo.onrender.com/conversation-relay?userId=${encodeURIComponent(userId)}`
