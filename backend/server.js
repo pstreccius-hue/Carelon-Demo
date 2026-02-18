@@ -133,10 +133,10 @@ app.all('/api/ai-voice-convo', async (req, res) => {
     const profileId = queryProfileId && queryProfileId !== 'undefined' ? queryProfileId : null;
 
     // 1. Get Segment profile traits
-    let profileTraits = {};
+    let traits = {};
     try {
       if (userId && userId.startsWith('+')) {
-        profileTraits = await getSegmentProfileByPhone(userId);
+        traits = await getSegmentProfileByPhone(userId);
       }
     } catch (e) {
       console.error('Failed to fetch Segment traits for welcome prompt:', e?.response?.data || e?.message);
