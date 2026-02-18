@@ -18,7 +18,7 @@ app.use(express.urlencoded({ extended: true }));
 async function getSegmentProfileByPhone(phone) {
   const SEGMENT_SPACE_ID = process.env.SEGMENT_SPACE_ID;
   const SEGMENT_PROFILE_TOKEN = process.env.SEGMENT_PROFILE_TOKEN;
-  const url = `https://profiles.segment.com/v1/spaces/${SEGMENT_SPACE_ID}/collections/users/profiles/phone:${encodeURIComponent(phone)}/traits?limit=200`;
+  const url = `https://profiles.segment.com/v1/spaces/${SEGMENT_SPACE_ID}/collections/users/profiles/user_id:${encodeURIComponent(userId)}/traits?limit=200`;
   const response = await axios.get(url, {
     headers: {
       Authorization: `Basic ${Buffer.from(SEGMENT_PROFILE_TOKEN + ':').toString('base64')}`
@@ -137,6 +137,7 @@ app.all('/api/ai-voice-convo', async (req, res) => {
     try {
       if (userId && userId.startsWith('+')) {
         traits = await getSegmentProfileByPhone(userId);
+        console.log('Segment traits for', userId, ':', JSON.stringify(profileTraits, null, 2));
       }
     } catch (e) {
       console.error('Failed to fetch Segment traits for welcome prompt:', e?.response?.data || e?.message);
