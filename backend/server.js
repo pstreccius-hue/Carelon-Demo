@@ -18,14 +18,14 @@ app.use(express.urlencoded({ extended: true }));
 async function getSegmentProfileByPhone(phone) {
   const SEGMENT_SPACE_ID = process.env.SEGMENT_SPACE_ID;
   const SEGMENT_PROFILE_TOKEN = process.env.SEGMENT_PROFILE_TOKEN;
-  const url = `https://profiles.segment.com/v1/spaces/${SEGMENT_SPACE_ID}/collections/users/profiles/user_id:${encodeURIComponent(userId)}/traits?limit=200`;
+  const url = `https://profiles.segment.com/v1/spaces/${SEGMENT_SPACE_ID}/collections/users/profiles/user_id:${encodeURIComponent(phone)}/traits?limit=200`;
   const response = await axios.get(url, {
     headers: {
       Authorization: `Basic ${Buffer.from(SEGMENT_PROFILE_TOKEN + ':').toString('base64')}`
     }
   });
   console.log('SEGMENT API URL:', url);
-  console.log('SEGMENT API FULL RESPONSE:', JSON.stringify(response.data, null, 2));
+  console.log('SEGMENT API RAW RESPONSE:', JSON.stringify(response.data, null, 2));
   return response.data.traits || {};
 }
 
@@ -147,7 +147,9 @@ app.all('/api/ai-voice-convo', async (req, res) => {
     let traits = {};
     try {
       if (userId && userId.startsWith('+')) {
+        console.log("About to fetch Segment profile for userId:", userId);
         traits = await getSegmentProfileByPhone(userId);
+        console.log("Segment traits for", userId, ":", JSON.stringify(traits, null, 2));
          console.log('DEBUG: CALLED getSegmentProfileByPhone WITH userId:', userId);
          console.log('DEBUG: Segment API response traits:', JSON.stringify(traits, null, 2));
       }
