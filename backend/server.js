@@ -136,8 +136,9 @@ app.all('/api/ai-voice-convo', async (req, res) => {
         .replace(/>/g, '&gt;');
     }
 
-    const { phone: queryPhone, memStoreId: queryMemStoreId, profileId: queryProfileId } = req.query;
-    const userId = queryPhone || 'anonymous';
+   const { phone: queryPhone, memStoreId: queryMemStoreId, profileId: queryProfileId } = req.query;
+   const userId = queryPhone || 'anonymous';
+   console.log('ai-voice-convo: userId is', userId);
 
     // Use query params to fetch Memory traits (recommended)
     const memStoreId = queryMemStoreId || process.env.DEFAULT_TWILIO_MEM_STORE_ID;
@@ -146,16 +147,11 @@ app.all('/api/ai-voice-convo', async (req, res) => {
     // 1. Get Segment profile traits
     let traits = {};
     try {
-      if (userId && userId.startsWith('+')) {
-        console.log("About to fetch Segment profile for userId:", userId);
-        traits = await getSegmentProfileByPhone(userId);
-        console.log("Segment traits for", userId, ":", JSON.stringify(traits, null, 2));
-         console.log('DEBUG: CALLED getSegmentProfileByPhone WITH userId:', userId);
-         console.log('DEBUG: Segment API response traits:', JSON.stringify(traits, null, 2));
-      }
-    } catch (e) {
+      traits = await getSegmentProfileByPhone(userId);
+      console.log('Segment traits for', userId, ':', JSON.stringify(traits, null, 2));
+}     catch (e) {
       console.error('Failed to fetch Segment traits for welcome prompt:', e?.response?.data || e?.message);
-    }
+}
 
     const firstName = traits.name || "there";
     const activeProgram = traits.program || "one of our health programs";
