@@ -24,6 +24,8 @@ async function getSegmentProfileByPhone(phone) {
       Authorization: `Basic ${Buffer.from(SEGMENT_PROFILE_TOKEN + ':').toString('base64')}`
     }
   });
+  console.log('SEGMENT API URL:', url);
+  console.log('SEGMENT API FULL RESPONSE:', JSON.stringify(response.data, null, 2));
   return response.data.traits || {};
 }
 
