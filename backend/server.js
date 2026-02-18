@@ -146,7 +146,8 @@ app.all('/api/ai-voice-convo', async (req, res) => {
     try {
       if (userId && userId.startsWith('+')) {
         traits = await getSegmentProfileByPhone(userId);
-        console.log('Segment traits for', userId, ':', JSON.stringify(traits, null, 2));
+         console.log('DEBUG: CALLED getSegmentProfileByPhone WITH userId:', userId);
+         console.log('DEBUG: Segment API response traits:', JSON.stringify(traits, null, 2));
       }
     } catch (e) {
       console.error('Failed to fetch Segment traits for welcome prompt:', e?.response?.data || e?.message);
@@ -155,6 +156,10 @@ app.all('/api/ai-voice-convo', async (req, res) => {
     const firstName = traits.name || "there";
     const activeProgram = traits.program || "one of our health programs";
     const additionalProgram = traits.additional_program || "";
+    
+    console.log('DEBUG: Extracted firstName:', firstName);
+    console.log('DEBUG: Extracted activeProgram:', activeProgram);
+    console.log('DEBUG: Extracted additionalProgram:', additionalProgram);
 
     // 2. Get Twilio Memory traits using profileId (if available)
     let twilioTraits = {};
