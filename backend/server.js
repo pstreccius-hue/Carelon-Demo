@@ -87,7 +87,10 @@ try {
     value: cleanPhone
   }, { auth: twilioAuth });
   console.log('Lookup Memory response:', JSON.stringify(resp.data, null, 2));
-  profileId = resp.data.id;
+  profileId = (resp.data.profiles && resp.data.profiles.length > 0)
+    ? resp.data.profiles[0]
+    : null;
+  console.log("Resolved profileId via Lookup:", profileId);
 } catch (err) {
   console.error("Error using Memory Profiles/Lookup:", err?.response?.data || err?.message);
 }
