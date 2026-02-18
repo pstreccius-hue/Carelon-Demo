@@ -39,6 +39,7 @@ async function getTwilioMemoryProfileByPhone(phone) {
       idType: "phone",
       value: phone
     }, { auth: twilioAuth });
+    console.log('Lookup Memory response:', JSON.stringify(resp.data, null, 2));
     // Fetch the full traits using the new profileId
     const profileId = resp.data.id;
     const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
@@ -73,22 +74,23 @@ app.post('/api/signup', async (req, res) => {
     });
     await sendSms(user.phone, `Hi ${user.name}, welcome to the ${user.program}!`);
 // --- HERE: Use Memory Profiles/Lookup for profileId ---
-    try {
-      const lookupUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/Lookup`;
-      const twilioAuth = {
-        username: process.env.TWILIO_SID,
-        password: process.env.TWILIO_TOKEN
-      };
-      // Ensure phone is in E.164 (+15551234567)
-      const resp = await axios.post(lookupUrl, {
-        idType: "phone",
-        value: user.phone
-      }, { auth: twilioAuth });
-      profileId = resp.data.id;
-      console.log("Resolved profileId via Lookup:", profileId);
-    } catch (err) {
-      console.error("Error using Memory Profiles/Lookup:", err?.response?.data || err?.message);
-    }
+    let profileId = null;
+try {
+  const lookupUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/Lookup`;
+  const twilioAuth = {
+    username: process.env.TWILIO_SID,
+    password: process.env.TWILIO_TOKEN
+  };
+  const cleanPhone = (user.phone || "").replace(/[^+\d]/g, "");
+  const resp = await axios.post(lookupUrl, {
+    idType: "phone",
+    value: cleanPhone
+  }, { auth: twilioAuth });
+  console.log('Lookup Memory response:', JSON.stringify(resp.data, null, 2));
+  profileId = resp.data.id;
+} catch (err) {
+  console.error("Error using Memory Profiles/Lookup:", err?.response?.data || err?.message);
+}
 
 
     // Now trigger the call with real IDs
