@@ -165,9 +165,9 @@ app.all('/api/ai-voice-convo', async (req, res) => {
       favoriteExercise = "exercise";
     }
 
-    const firstName = profileTraits.first_name || profileTraits.name || "there";
-    const activeProgram = profileTraits.program || "one of our health programs";
-    const additionalProgram = profileTraits.additional_program || "";
+    const firstName = traits.first_name || traits.name || "there";
+    const activeProgram = traits.program || "one of our health programs";
+    const additionalProgram = traits.additional_program || "";
 
     const welcomePrompt =
       `Hello, ${firstName}! Welcome to the ${activeProgram}` +
