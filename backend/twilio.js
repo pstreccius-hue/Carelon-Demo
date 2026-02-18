@@ -12,4 +12,3 @@ exports.sendVoice = (to, name, program, memStoreId, profileId) =>
     from: TWILIO_NUMBER,
     url: `https://carelon-demo.onrender.com/api/ai-voice-convo?phone=${encodeURIComponent(to)}&memStoreId=${encodeURIComponent(memStoreId)}&profileId=${encodeURIComponent(profileId)}`
   });
-};
