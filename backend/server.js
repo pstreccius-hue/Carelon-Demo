@@ -18,7 +18,7 @@ app.use(express.urlencoded({ extended: true }));
 async function getSegmentProfileByPhone(phone) {
   const SEGMENT_SPACE_ID = process.env.SEGMENT_SPACE_ID;
   const SEGMENT_PROFILE_TOKEN = process.env.SEGMENT_PROFILE_TOKEN;
-  const url = `https://profiles.segment.com/v1/spaces/${SEGMENT_SPACE_ID}/collections/users/profiles/user_id:${encodeURIComponent(phone)}/traits?limit=200`;
+  const url = `https://profiles.segment.com/v1/spaces/${SEGMENT_SPACE_ID}/collections/users/profiles/user_id:${encodeURIComponent(userId)}/traits?limit=200`;
   const response = await axios.get(url, {
     headers: {
       Authorization: `Basic ${Buffer.from(SEGMENT_PROFILE_TOKEN + ':').toString('base64')}`
