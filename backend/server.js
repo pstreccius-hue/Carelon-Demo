@@ -65,9 +65,56 @@ async function getTwilioMemoryProfileByPhone(phone) {
 //---- Conversation Intelligence Webhook (just analytics now) ----//
 app.post('/webhook/conversational-intelligence', async (req, res) => {
   try {
-    // Analytics and Segment event tracking only
+    const operatorResults = req.body.operatorResults || [];
+
+    for (const op of operatorResults) {
+      if (op.result && op.result.summary) {
+        const summary = op.result.summary;
+        const customerParticipant = (op.executionDetails?.participants || []).find(
+          p => p.type === 'CUSTOMER'
+        );
+        const profileId = customerParticipant && customerParticipant.profileId;
+        const memStoreId = op.executionDetails?.context?.customerMemory?.memoryStoreId || process.env.DEFAULT_TWILIO_MEM_STORE_ID;
+
+        if (profileId && memStoreId) {
+          try {
+            const twilioAuth = {
+              username: process.env.TWILIO_SID,
+              password: process.env.TWILIO_TOKEN
+            };
+            const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
+            const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
+            const traits = profileResp.data.traits || {};
+            const phone = traits.Contact && traits.Contact.phone ? traits.Contact.phone : null;
+            const favoriteExercise = traits.Contact && traits.Contact.favoriteExercise ? traits.Contact.favoriteExercise : "exercise";
+
+            if (phone) {
+              // --- Segment analytics calls remain here --
+              await sendIdentify({ userId: phone, traits: { favoriteExercise } });
+              await sendTrack({
+                userId: phone,
+                event: 'AI Gen Call Summary - Twilio Memora',
+                properties: {
+                  most_recent_call_summary: summary,
+                  mem_profile_id: profileId
+                }
+              });
+              console.log(`[CI webhook] Sent Call Summary event to Segment for phone ${phone}`);
+            } else {
+              console.warn('[CI webhook] No phone found in Twilio Memory profile.', profileResp.data);
+            }
+          } catch (fetchErr) {
+            console.error('Error fetching Twilio Memory profile:', fetchErr?.response?.data || fetchErr.message);
+          }
+        } else {
+          console.warn('[CI webhook] Missing profileId or memStoreId.', { profileId, memStoreId });
+        }
+      }
+    }
+
     res.status(200).send('ok');
   } catch (err) {
+    console.error("CI Webhook Error:", err);
     res.status(500).send('Webhook processing error');
   }
 });
