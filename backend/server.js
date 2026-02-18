@@ -136,9 +136,15 @@ app.all('/api/ai-voice-convo', async (req, res) => {
         .replace(/>/g, '&gt;');
     }
 
-   const { phone: queryPhone, memStoreId: queryMemStoreId, profileId: queryProfileId } = req.query;
-   const userId = queryPhone || 'anonymous';
-   console.log('ai-voice-convo: userId is', userId);
+    // Print entire req.query for debugging
+    console.log('ai-voice-convo: req.query:', JSON.stringify(req.query, null, 2));
+
+    const { phone: queryPhone, memStoreId: queryMemStoreId, profileId: queryProfileId } = req.query;
+    // Always log queryPhone. Make sure it's present and +E.164
+    console.log('ai-voice-convo: queryPhone:', queryPhone);
+
+    const userId = queryPhone || 'anonymous';
+    console.log('ai-voice-convo: userId is', userId);
 
     // Use query params to fetch Memory traits (recommended)
     const memStoreId = queryMemStoreId || process.env.DEFAULT_TWILIO_MEM_STORE_ID;
@@ -149,14 +155,14 @@ app.all('/api/ai-voice-convo', async (req, res) => {
     try {
       traits = await getSegmentProfileByPhone(userId);
       console.log('Segment traits for', userId, ':', JSON.stringify(traits, null, 2));
-}     catch (e) {
+    } catch (e) {
       console.error('Failed to fetch Segment traits for welcome prompt:', e?.response?.data || e?.message);
-}
+    }
 
     const firstName = traits.name || "there";
     const activeProgram = traits.program || "one of our health programs";
     const additionalProgram = traits.additional_program || "";
-    
+
     console.log('DEBUG: Extracted firstName:', firstName);
     console.log('DEBUG: Extracted activeProgram:', activeProgram);
     console.log('DEBUG: Extracted additionalProgram:', additionalProgram);
