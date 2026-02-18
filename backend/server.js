@@ -236,6 +236,9 @@ server.listen(process.env.PORT || 3001, () => console.log('Backend running on 30
 const wss = new WebSocket.Server({ server, path: '/conversation-relay' });
 wss.on('connection', (ws, req) => {
   console.log('ConversationRelay WebSocket connected!');
+
+  ws.sessionMessages = null; // Will set this after fetching user traits
+
   ws.on('message', async (message) => {
     try {
       const data = JSON.parse(message);
@@ -244,53 +247,50 @@ wss.on('connection', (ws, req) => {
       const memStoreId = parsedUrl ? parsedUrl.searchParams.get('memStoreId') || process.env.DEFAULT_TWILIO_MEM_STORE_ID : process.env.DEFAULT_TWILIO_MEM_STORE_ID;
       const profileId = parsedUrl ? parsedUrl.searchParams.get('profileId') : null;
 
-      // 1. Get Segment profile traits for personalization
-      let profileTraits = {};
-      try {
-        if (userId && userId.startsWith('+')) {
-          profileTraits = await getSegmentProfileByPhone(userId);
-        }
-      } catch (e) {
-        console.error('Failed to fetch Segment traits for personalization:', e?.response?.data || e?.message);
-      }
-
-      // 2. Get Twilio Memory traits for this session (using profileId)
-      let twilioTraits = {};
-      let favoriteExercise = null;
-      if (profileId && memStoreId) {
+      // On first prompt/setup, fetch traits and build the system prompt ONCE.
+      if (!ws.sessionMessages) {
+        // 1. Get Segment profile traits for personalization
+        let profileTraits = {};
         try {
-          const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
-          const twilioAuth = {
-            username: process.env.TWILIO_SID,
-            password: process.env.TWILIO_TOKEN
-          };
-          const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
-          twilioTraits = profileResp.data.traits || {};
-          favoriteExercise = (
-            twilioTraits.Contact &&
-            typeof twilioTraits.Contact.favoriteExercise === "string" &&
-            twilioTraits.Contact.favoriteExercise.trim() !== ""
-          ) ? twilioTraits.Contact.favoriteExercise : null;
+          if (userId && userId.startsWith('+')) {
+            profileTraits = await getSegmentProfileByPhone(userId);
+            console.log('Segment traits for', userId, ':', JSON.stringify(profileTraits, null, 2));
+          }
         } catch (e) {
-          console.error('Failed to fetch Twilio Memory traits for websocket personalization:', e?.response?.data || e?.message);
+          console.error('Failed to fetch Segment traits for personalization:', e?.response?.data || e?.message);
         }
-      }
-      if (!favoriteExercise) {
-        favoriteExercise = "exercise";
-      }
 
-      const firstName = profileTraits.first_name || profileTraits.name || "there";
-      const activeProgram = profileTraits.program || "one of our health programs";
-      const additionalProgram = profileTraits.additional_program || "one of our health programs";
+        // 2. Get Twilio Memory traits for this session (using profileId)
+        let twilioTraits = {};
+        let favoriteExercise = null;
+        if (profileId && memStoreId) {
+          try {
+            const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
+            const twilioAuth = {
+              username: process.env.TWILIO_SID,
+              password: process.env.TWILIO_TOKEN
+            };
+            const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
+            twilioTraits = profileResp.data.traits || {};
+            favoriteExercise = (
+              twilioTraits.Contact &&
+              typeof twilioTraits.Contact.favoriteExercise === "string" &&
+              twilioTraits.Contact.favoriteExercise.trim() !== ""
+            ) ? twilioTraits.Contact.favoriteExercise : null;
+          } catch (e) {
+            console.error('Failed to fetch Twilio Memory traits for websocket personalization:', e?.response?.data || e?.message);
+          }
+        }
+        if (!favoriteExercise) {
+          favoriteExercise = "exercise";
+        }
 
-      switch (data.type) {
-        case "setup":
-          // Optionally: send an initial message or do nothing
-          break;
-        case "prompt":
-          const userText = data.voicePrompt || '';
-          // Build an AI prompt using full personalization
-          const systemPrompt = `You are Carelon Health's automated agent on a phone call.
+        const firstName = profileTraits.name || "there";
+        const activeProgram = profileTraits.program || "one of our health programs";
+        const additionalProgram = profileTraits.additional_program || "";
+
+        // Build system prompt ONCE per session!
+        const systemPrompt = `You are Carelon Health's automated agent on a phone call.
 - Greet the user by first name (${firstName}).
 - Mention their active program (${activeProgram}) and any additional programs (${additionalProgram}), and that their favorite exercise is ${favoriteExercise}. Then offer tailored assistance or next steps.
 - If the user requests an overview of a program, provide a friendly, high-level (never clinical or with PII) overview, but only give the same program's overview once per call (do not repeat overviews already provided in the conversation history).
@@ -300,21 +300,28 @@ wss.on('connection', (ws, req) => {
 - If user says they are done or do not have more questions, wish them well and say goodbye.
 Always reply in a positive, conversational, and concise tone. When confirming enrollment, use the format "ENROLL: <Program Name>" in addition to your reply.`;
 
-          const messages = [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userText }
-          ];
+        ws.sessionMessages = [
+          { role: "system", content: systemPrompt }
+        ];
+      }
 
-          console.log('Sending to OpenAI:', messages);
+      switch (data.type) {
+        case "setup":
+          // Optionally send a TTS welcome or do nothing
+          break;
+
+        case "prompt": {
+          const userText = data.voicePrompt || '';
+          ws.sessionMessages.push({ role: "user", content: userText });
 
           const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
           const aiRes = await openai.chat.completions.create({
             model: 'gpt-3.5-turbo',
-            messages,
+            messages: ws.sessionMessages
           });
 
           const reply = aiRes.choices[0].message.content;
-          console.log('AI REPLY:', reply);
+          ws.sessionMessages.push({ role: "assistant", content: reply });
 
           ws.send(JSON.stringify({
             type: "text",
@@ -337,6 +344,8 @@ Always reply in a positive, conversational, and concise tone. When confirming en
             });
           }
           break;
+        }
+
         case "interrupt":
           console.log("Received interrupt event");
           break;
