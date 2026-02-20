@@ -66,7 +66,6 @@ async function getTwilioMemoryProfileByPhone(phone) {
 app.post('/webhook/conversational-intelligence', async (req, res) => {
   try {
     const operatorResults = req.body.operatorResults || [];
-
     for (const op of operatorResults) {
       if (op.result && op.result.summary) {
         const summary = op.result.summary;
@@ -74,8 +73,7 @@ app.post('/webhook/conversational-intelligence', async (req, res) => {
           p => p.type === 'CUSTOMER'
         );
         const profileId = customerParticipant && customerParticipant.profileId;
-        const memStoreId = op.executionDetails?.context?.customerMemory?.memoryStoreId || process.env.DEFAULT_TWILIO_MEM_STORE_ID;
-
+        const memStoreId = op.executionDetails?.context?.customerMemory?.memoryStoreId || "YOUR_MEM_STORE_ID";
         if (profileId && memStoreId) {
           try {
             const twilioAuth = {
@@ -85,12 +83,11 @@ app.post('/webhook/conversational-intelligence', async (req, res) => {
             const profileUrl = `https://memory.twilio.com/v1/Stores/${memStoreId}/Profiles/${profileId}`;
             const profileResp = await axios.get(profileUrl, { auth: twilioAuth });
             const traits = profileResp.data.traits || {};
-            const phone = traits.Contact && traits.Contact.phone ? traits.Contact.phone : null;
-            const favoriteExercise = traits.Contact && traits.Contact.favoriteExercise ? traits.Contact.favoriteExercise : "exercise";
-
+            const phone =
+              traits.phone ||
+              traits.phone_number ||
+              (traits.Contact && (traits.Contact.phone || traits.Contact.phone_number));
             if (phone) {
-              // --- Segment analytics calls remain here --
-              await sendIdentify({ userId: phone, traits: { favoriteExercise } });
               await sendTrack({
                 userId: phone,
                 event: 'AI Gen Call Summary - Twilio Memora',
